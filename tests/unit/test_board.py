@@ -11,6 +11,7 @@ from fravenir.core.board import (
     create_space,
     create_thread,
     edit_post,
+    get_post_revision,
     get_post_sources,
     get_thread,
     list_spaces,
@@ -215,3 +216,42 @@ def test_organize_thread_preserves_exact_source_revisions(tmp_project: Path) -> 
             author_kind="agent",
             author_display_name="Stale organizer",
         )
+
+
+def test_get_post_revision_recovers_historical_body(tmp_project: Path) -> None:
+    character_id = _init(tmp_project, "board_revision_read")
+    space = create_space(character_id=character_id, name="research")
+    thread = create_thread(
+        character_id=character_id,
+        space_id=int(space["space_id"]),
+        title="history",
+        author_kind="human",
+        author_display_name="Ozone",
+        initial_post="revision one",
+    )
+    data = get_thread(character_id=character_id, thread_id=int(thread["thread_id"]))
+    post_id = int(data["posts"][0]["id"])
+
+    edit_post(
+        character_id=character_id,
+        post_id=post_id,
+        body="revision two",
+        expected_revision=1,
+        editor_kind="human",
+        editor_display_name="Ozone",
+    )
+
+    old = get_post_revision(
+        character_id=character_id,
+        post_id=post_id,
+        revision=1,
+    )
+    current = get_post_revision(
+        character_id=character_id,
+        post_id=post_id,
+    )
+    assert old["body"] == "revision one"
+    assert old["revision"] == 1
+    assert old["current_revision"] == 2
+    assert current["body"] == "revision two"
+    assert current["revision"] == 2
