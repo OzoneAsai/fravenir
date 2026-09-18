@@ -5,12 +5,20 @@ from __future__ import annotations
 from typing import Literal
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from fravenir.core.extraction import ExtractionClient
 from fravenir.core.provenance import derive_memory_from_posts, get_episode_sources
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
+
+
+def _as_tool_error(fn):
+    try:
+        return fn()
+    except ValueError as e:
+        raise ToolError(str(e)) from e
 
 
 def register_provenance_tools(
@@ -41,7 +49,7 @@ def register_provenance_tools(
         importance: int = 1,
     ) -> dict[str, object]:
         """掲示板postを原典として、出典付きのmemoryを作成する。"""
-        return derive_memory_from_posts(
+        return _as_tool_error(lambda: derive_memory_from_posts(
             character_id=character_id,
             config=config,
             embedder=embedder,
@@ -53,14 +61,14 @@ def register_provenance_tools(
             author_external_subject=author_external_subject,
             kind=kind,
             importance=importance,
-        )
+        ))
 
     @mcp.tool(
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
     )
     def memory_sources(episode_id: int) -> list[dict[str, object]]:
         """memoryがどの原典から導出されたかを取得する。"""
-        return get_episode_sources(
+        return _as_tool_error(lambda: get_episode_sources(
             character_id=character_id,
             episode_id=episode_id,
-        )
+        ))
