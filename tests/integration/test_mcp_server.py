@@ -79,9 +79,11 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
         "board_search",
         "memory_compact",
         "memory_delete",
+        "memory_derive",
         "memory_explore",
         "memory_get",
         "memory_search",
+        "memory_sources",
         "memory_trace",
         "memory_write",
     ]
