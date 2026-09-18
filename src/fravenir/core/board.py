@@ -259,6 +259,96 @@ def add_post(
         conn.close()
 
 
+def edit_post(
+    *,
+    character_id: str,
+    post_id: int,
+    body: str,
+    expected_revision: int,
+    editor_kind: ActorKind,
+    editor_display_name: str,
+    editor_external_subject: str | None = None,
+) -> dict[str, object]:
+    """Edit a post with optimistic concurrency while retaining the old revision."""
+    clean_body = body.strip()
+    if not clean_body:
+        raise ValueError("post body must not be empty")
+    if expected_revision < 1:
+        raise ValueError("expected_revision must be >= 1")
+
+    conn = _connect(character_id)
+    try:
+        post = conn.execute(
+            """
+            SELECT id, thread_id, body, revision
+            FROM posts
+            WHERE id = ?
+            """,
+            (post_id,),
+        ).fetchone()
+        if post is None:
+            raise ValueError(f"post not found: {post_id}")
+
+        current_revision = int(post["revision"])
+        if current_revision != expected_revision:
+            raise ValueError(
+                f"stale post revision: expected {expected_revision}, current {current_revision}"
+            )
+        if str(post["body"]) == clean_body:
+            return {
+                "post_id": post_id,
+                "revision": current_revision,
+                "changed": False,
+            }
+
+        editor_id = _actor_id(
+            conn,
+            kind=editor_kind,
+            display_name=editor_display_name,
+            external_subject=editor_external_subject,
+        )
+        now = datetime.now(UTC).isoformat()
+        conn.execute(
+            """
+            INSERT INTO post_revisions
+                (post_id, revision, body, edited_at, editor_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (post_id, current_revision, post["body"], now, editor_id),
+        )
+        next_revision = current_revision + 1
+        conn.execute(
+            """
+            UPDATE posts
+            SET body = ?, revision = ?, edited_at = ?
+            WHERE id = ? AND revision = ?
+            """,
+            (clean_body, next_revision, now, post_id, current_revision),
+        )
+        thread_id = int(post["thread_id"])
+        thread = conn.execute(
+            "SELECT version FROM threads WHERE id = ?",
+            (thread_id,),
+        ).fetchone()
+        if thread is None:
+            raise RuntimeError(f"post {post_id} refers to missing thread {thread_id}")
+        thread_version = int(thread["version"]) + 1
+        conn.execute(
+            "UPDATE threads SET version = ?, updated_at = ? WHERE id = ?",
+            (thread_version, now, thread_id),
+        )
+        conn.commit()
+        return {
+            "post_id": post_id,
+            "revision": next_revision,
+            "thread_id": thread_id,
+            "thread_version": thread_version,
+            "changed": True,
+        }
+    finally:
+        conn.close()
+
+
 def get_thread(*, character_id: str, thread_id: int) -> dict[str, object]:
     conn = _connect(character_id)
     try:
