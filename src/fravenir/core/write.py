@@ -8,9 +8,10 @@ Step 6: 矛盾検出 + supersede 自動設定 (P5-3 以降)。
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Sequence
+from typing import TYPE_CHECKING, Literal
 
 import structlog
 
