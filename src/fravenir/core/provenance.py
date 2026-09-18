@@ -73,7 +73,10 @@ def derive_memory_from_posts(
         embedder=embedder,
         extraction_client=extraction_client,
     )
-    episode_id = int(written["episode_id"])
+    episode_value = written.get("episode_id")
+    if not isinstance(episode_value, int):
+        raise RuntimeError("memory_write returned an invalid episode_id")
+    episode_id = episode_value
 
     conn = sqlite3.connect(path)
     try:
