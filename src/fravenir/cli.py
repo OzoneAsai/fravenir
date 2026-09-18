@@ -1257,6 +1257,37 @@ def migrate_curated_and_audit_cmd(character_id: str, dry_run: bool, yes: bool) -
     click.echo(f"✓ Applied ({' / '.join(parts)})")
 
 
+@migrate_group.command("board")
+@click.argument("character_id", callback=_validate_character_id)
+@click.option("--dry-run", is_flag=True, default=False)
+@click.option("--yes", "-y", is_flag=True, default=False, help="Skip confirmation prompt.")
+def migrate_board_cmd(character_id: str, dry_run: bool, yes: bool) -> None:
+    """Create additive board tables for an existing character database."""
+    from fravenir.migrations.board import migrate
+
+    _require_data_dir(character_id)
+    db = kv_db_path(character_id)
+
+    preview = migrate(db, dry_run=True)
+    click.echo(f"Character: {character_id}  ({db})")
+    if preview.created_tables:
+        click.echo(f"  - tables to create: {', '.join(preview.created_tables)}")
+    else:
+        click.echo("  - nothing to do (already migrated)")
+
+    if dry_run:
+        click.echo("(dry-run; no changes applied)")
+        return
+    if not preview.created_tables:
+        return
+    if not yes and not click.confirm("Proceed?", default=False):
+        click.echo("Aborted.")
+        return
+
+    result = migrate(db, dry_run=False)
+    click.echo(f"✓ Created board tables: {', '.join(result.created_tables)}")
+
+
 @main.command("serve")
 @click.option("--character", "character_id", required=True, help="Character id to serve.")
 @click.option(
