@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Sequence
 
 import structlog
 
@@ -46,7 +46,7 @@ def memory_write(
     config: AppConfig,
     embedder: Embedder,
     extraction_client: ExtractionClient | None = None,
-    source_refs: list[tuple[NodeType, int]] | None = None,
+    source_refs: Sequence[tuple[NodeType, int]] | None = None,
 ) -> dict[str, object]:
     """Write one episode, its embedding, and (if extraction_client given) entities/relations.
 
