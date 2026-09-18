@@ -130,6 +130,35 @@ def register_board_tools(mcp: MCPServer, *, character_id: str) -> None:
         ))
 
     @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
+    def board_edit_post(
+        post_id: int,
+        body: str,
+        expected_revision: int,
+        editor_display_name: str,
+        editor_kind: Literal["human", "agent", "system"] = "agent",
+        editor_external_subject: str | None = None,
+    ) -> dict[str, object]:
+        """postをrevision一致時だけ編集し、旧本文を履歴へ保存する。"""
+        return _as_tool_error(
+            lambda: _board.edit_post(
+                character_id=character_id,
+                post_id=post_id,
+                body=body,
+                expected_revision=expected_revision,
+                editor_kind=editor_kind,
+                editor_display_name=editor_display_name,
+                editor_external_subject=editor_external_subject,
+            )
+        )
+
+    @mcp.tool(
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
     )
     def board_search(query: str, limit: int = 20) -> list[dict[str, object]]:
