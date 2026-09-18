@@ -31,6 +31,7 @@ function escapeHtml(s) {
 const SPREAD_DEFAULT = 3.0;
 const state = {
   scope: 'active',
+  surface: localStorage.getItem('admin_surface') || 'graph',
   view: localStorage.getItem('admin_view') || 'panel',
   theme: localStorage.getItem('admin_theme') || 'dark',
   spread: parseFloat(localStorage.getItem('admin_spread')) || SPREAD_DEFAULT,
@@ -46,16 +47,32 @@ const state = {
   graphData: null,
   stats: null,
   cy: null,
+  board: {
+    author: localStorage.getItem('board_author') || 'admin',
+    spaces: [],
+    threads: [],
+    thread: null,
+    selectedSpaceId: null,
+    selectedThreadId: null,
+  },
 };
 
 // ─── API ────────────────────────────────────────────────────────────────────
-async function api(path) {
-  const res = await fetch(path);
+async function api(path, options = {}) {
+  const res = await fetch(path, options);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`${res.status} ${res.statusText}${body ? ' — ' + body : ''}`);
   }
   return res.json();
+}
+
+async function apiJson(path, method, payload) {
+  return api(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 // ─── Cytoscape ──────────────────────────────────────────────────────────────
@@ -643,6 +660,231 @@ async function openOrphanModal() {
   });
 }
 
+// ─── Board ──────────────────────────────────────────────────────────────────
+function renderBoardSpaces() {
+  const target = document.getElementById('board-spaces');
+  if (!target) return;
+  if (!state.board.spaces.length) {
+    target.innerHTML = '<div class="empty-state">spaceがありません</div>';
+    return;
+  }
+  target.innerHTML = state.board.spaces.map((space) => {
+    const selected = Number(space.id) === Number(state.board.selectedSpaceId) ? ' selected' : '';
+    return `<button type="button" class="board-list-item${selected}" data-space-id="${space.id}">` +
+      `<span class="board-list-title">${escapeHtml(space.name)}</span>` +
+      `<span class="board-list-meta">${space.thread_count} threads</span>` +
+      '</button>';
+  }).join('');
+}
+
+function renderBoardThreads() {
+  const target = document.getElementById('board-threads');
+  if (!target) return;
+  if (!state.board.threads.length) {
+    target.innerHTML = '<div class="empty-state">threadがありません</div>';
+    return;
+  }
+  target.innerHTML = state.board.threads.map((thread) => {
+    const selected = Number(thread.id) === Number(state.board.selectedThreadId) ? ' selected' : '';
+    return `<button type="button" class="board-list-item${selected}" data-thread-id="${thread.id}">` +
+      `<span class="board-list-title">${escapeHtml(thread.title)}</span>` +
+      `<span class="board-list-meta">v${thread.version} · ${thread.post_count} posts</span>` +
+      '</button>';
+  }).join('');
+}
+
+function renderBoardThread() {
+  const target = document.getElementById('board-thread');
+  if (!target) return;
+  const data = state.board.thread;
+  if (!data) {
+    target.innerHTML = '<div class="empty-state">threadを選択してください</div>';
+    return;
+  }
+
+  const thread = data.thread;
+  const posts = data.posts || [];
+  const postHtml = posts.map((post) => {
+    const allowedKind = ['summary', 'decision', 'note'].includes(post.kind) ? post.kind : 'message';
+    const className = allowedKind === 'message'
+      ? 'board-post'
+      : `board-post board-post-${allowedKind}`;
+    const author = post.author_name || post.author_kind || 'unknown';
+    return `<article class="${className}">` +
+      '<div class="board-post-head">' +
+      `<strong>${escapeHtml(author)}</strong>` +
+      `<span class="board-post-kind">${escapeHtml(post.kind)}</span>` +
+      `<span>r${post.revision}</span>` +
+      `<span>${escapeHtml(post.created_at)}</span>` +
+      '</div>' +
+      `<div class="board-post-body">${escapeHtml(post.body)}</div>` +
+      '</article>';
+  }).join('');
+
+  target.innerHTML =
+    '<div class="board-thread-header">' +
+    `<h2>${escapeHtml(thread.title)}</h2>` +
+    `<span class="board-list-meta">thread #${thread.id} · v${thread.version} · ${escapeHtml(thread.status)}</span>` +
+    '</div>' +
+    (postHtml || '<div class="empty-state">postがありません</div>') +
+    '<div class="board-composer">' +
+    '<textarea id="board-post-body" maxlength="20000" placeholder="このthreadへ投稿..."></textarea>' +
+    '<div class="board-composer-actions">' +
+    '<button type="button" id="board-post-submit">Post</button>' +
+    '</div></div>';
+}
+
+async function reloadBoardSpaces() {
+  const data = await api('/api/board/spaces');
+  state.board.spaces = data.spaces || [];
+  if (
+    state.board.selectedSpaceId == null ||
+    !state.board.spaces.some((space) => Number(space.id) === Number(state.board.selectedSpaceId))
+  ) {
+    state.board.selectedSpaceId = state.board.spaces.length ? state.board.spaces[0].id : null;
+  }
+  renderBoardSpaces();
+  await reloadBoardThreads();
+}
+
+async function reloadBoardThreads() {
+  if (state.board.selectedSpaceId == null) {
+    state.board.threads = [];
+    state.board.thread = null;
+    state.board.selectedThreadId = null;
+    renderBoardThreads();
+    renderBoardThread();
+    return;
+  }
+  const data = await api(
+    `/api/board/threads?space_id=${encodeURIComponent(state.board.selectedSpaceId)}`
+  );
+  state.board.threads = data.threads || [];
+  if (
+    state.board.selectedThreadId != null &&
+    !state.board.threads.some((thread) => Number(thread.id) === Number(state.board.selectedThreadId))
+  ) {
+    state.board.selectedThreadId = null;
+    state.board.thread = null;
+  }
+  renderBoardThreads();
+  renderBoardThread();
+}
+
+async function loadBoardThread(threadId) {
+  const data = await api(`/api/board/threads/${threadId}`);
+  state.board.selectedThreadId = Number(threadId);
+  state.board.thread = data;
+  state.board.selectedSpaceId = data.thread.space_id;
+  renderBoardSpaces();
+  renderBoardThreads();
+  renderBoardThread();
+}
+
+async function searchBoard() {
+  const input = document.getElementById('board-search-input');
+  const q = input ? input.value.trim() : '';
+  if (!q) {
+    await reloadBoardThreads();
+    return;
+  }
+  const data = await api(`/api/board/search?q=${encodeURIComponent(q)}`);
+  const target = document.getElementById('board-threads');
+  if (!target) return;
+  const results = data.results || [];
+  if (!results.length) {
+    target.innerHTML = '<div class="empty-state">一致なし</div>';
+    return;
+  }
+  target.innerHTML = results.map((item) =>
+    `<button type="button" class="board-list-item board-search-result" data-thread-id="${item.thread_id}">` +
+    `<span class="board-list-title">${escapeHtml(item.title)}</span>` +
+    `<span class="board-list-meta">${escapeHtml(item.result_type)} · ${escapeHtml(item.body || '')}</span>` +
+    '</button>'
+  ).join('');
+}
+
+async function createBoardSpace() {
+  const name = window.prompt('Space name');
+  if (!name || !name.trim()) return;
+  const description = window.prompt('Description (optional)') || null;
+  const created = await apiJson('/api/board/spaces', 'POST', {
+    name: name.trim(),
+    description,
+  });
+  state.board.selectedSpaceId = created.space_id;
+  await reloadBoardSpaces();
+}
+
+async function createBoardThread() {
+  if (state.board.selectedSpaceId == null) {
+    window.alert('先にspaceを作成してください');
+    return;
+  }
+  const title = window.prompt('Thread title');
+  if (!title || !title.trim()) return;
+  const initialPost = window.prompt('Initial post (optional)') || null;
+  const created = await apiJson('/api/board/threads', 'POST', {
+    space_id: state.board.selectedSpaceId,
+    title: title.trim(),
+    author_display_name: state.board.author,
+    author_kind: 'human',
+    initial_post: initialPost,
+  });
+  await reloadBoardThreads();
+  await loadBoardThread(created.thread_id);
+}
+
+async function submitBoardPost() {
+  if (state.board.selectedThreadId == null) return;
+  const input = document.getElementById('board-post-body');
+  if (!input) return;
+  const body = input.value.trim();
+  if (!body) return;
+  await apiJson(
+    `/api/board/threads/${state.board.selectedThreadId}/posts`,
+    'POST',
+    {
+      body,
+      author_display_name: state.board.author,
+      author_kind: 'human',
+      kind: 'message',
+    }
+  );
+  input.value = '';
+  await reloadBoardThreads();
+  await loadBoardThread(state.board.selectedThreadId);
+}
+
+async function setSurface(surface) {
+  state.surface = surface === 'board' ? 'board' : 'graph';
+  localStorage.setItem('admin_surface', state.surface);
+  document.body.classList.toggle('surface-board', state.surface === 'board');
+
+  const cyEl = document.getElementById('cy');
+  const boardEl = document.getElementById('board-view');
+  if (cyEl) cyEl.hidden = state.surface === 'board';
+  if (boardEl) boardEl.hidden = state.surface !== 'board';
+
+  document.querySelectorAll('[data-surface]').forEach((btn) => {
+    const active = btn.dataset.surface === state.surface;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  if (state.surface === 'board') {
+    try {
+      await reloadBoardSpaces();
+    } catch (err) {
+      console.error('board load failed', err);
+      const target = document.getElementById('board-thread');
+      if (target) target.innerHTML = '<div class="empty-state">Boardの読み込みに失敗しました</div>';
+    }
+  } else if (state.cy) {
+    state.cy.resize();
+  }
+}
+
 // ─── View / Scope / Theme ───────────────────────────────────────────────────
 function setView(mode) {
   state.view = mode;
@@ -716,6 +958,92 @@ async function reloadAll() {
 
 // ─── Events ─────────────────────────────────────────────────────────────────
 function setupEventListeners() {
+  // Surface switch
+  const surfaceSwitch = document.getElementById('surface-switch');
+  if (surfaceSwitch) {
+    surfaceSwitch.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-surface]');
+      if (btn) setSurface(btn.dataset.surface);
+    });
+  }
+
+  const boardAuthor = document.getElementById('board-author');
+  if (boardAuthor) {
+    boardAuthor.value = state.board.author;
+    boardAuthor.addEventListener('change', (e) => {
+      const value = e.target.value.trim() || 'admin';
+      state.board.author = value;
+      e.target.value = value;
+      localStorage.setItem('board_author', value);
+    });
+  }
+
+  const boardView = document.getElementById('board-view');
+  if (boardView) {
+    boardView.addEventListener('click', (e) => {
+      const space = e.target.closest('[data-space-id]');
+      if (space) {
+        state.board.selectedSpaceId = Number(space.dataset.spaceId);
+        state.board.selectedThreadId = null;
+        state.board.thread = null;
+        renderBoardSpaces();
+        reloadBoardThreads().catch((err) => console.error('board threads failed', err));
+        return;
+      }
+      const thread = e.target.closest('[data-thread-id]');
+      if (thread) {
+        loadBoardThread(Number(thread.dataset.threadId))
+          .catch((err) => console.error('board thread failed', err));
+        return;
+      }
+      if (e.target.closest('#board-post-submit')) {
+        submitBoardPost().catch((err) => {
+          console.error('board post failed', err);
+          window.alert('投稿に失敗しました');
+        });
+      }
+    });
+  }
+
+  const boardRefresh = document.getElementById('board-refresh');
+  if (boardRefresh) {
+    boardRefresh.addEventListener('click', () => {
+      reloadBoardSpaces().catch((err) => console.error('board refresh failed', err));
+    });
+  }
+  const boardCreateSpace = document.getElementById('board-create-space');
+  if (boardCreateSpace) {
+    boardCreateSpace.addEventListener('click', () => {
+      createBoardSpace().catch((err) => {
+        console.error('space create failed', err);
+        window.alert('space作成に失敗しました');
+      });
+    });
+  }
+  const boardCreateThread = document.getElementById('board-create-thread');
+  if (boardCreateThread) {
+    boardCreateThread.addEventListener('click', () => {
+      createBoardThread().catch((err) => {
+        console.error('thread create failed', err);
+        window.alert('thread作成に失敗しました');
+      });
+    });
+  }
+  const boardSearchBtn = document.getElementById('board-search-btn');
+  if (boardSearchBtn) {
+    boardSearchBtn.addEventListener('click', () => {
+      searchBoard().catch((err) => console.error('board search failed', err));
+    });
+  }
+  const boardSearchInput = document.getElementById('board-search-input');
+  if (boardSearchInput) {
+    boardSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        searchBoard().catch((err) => console.error('board search failed', err));
+      }
+    });
+  }
+
   // Scope
   document.querySelectorAll('input[name="scope"]').forEach((el) => {
     el.addEventListener('change', (e) => {
@@ -950,12 +1278,13 @@ async function main() {
     applyFilters();
   } catch (err) {
     console.error('initial graph fetch failed', err);
-    document.getElementById('cy').innerHTML = '<div class="empty-state" style="padding:2rem">グラフの読み込みに失敗しました</div>';
+    document.getElementById('cy').innerHTML = '<div class="empty-state">グラフの読み込みに失敗しました</div>';
   }
 
+  setupEventListeners();
   setView(state.view);
   setTheme(state.theme);
-  setupEventListeners();
+  await setSurface(state.surface);
 }
 
 main();

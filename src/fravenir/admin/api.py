@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Never
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from fravenir.admin import queries, schemas
+from fravenir.core import board as board_core
 
 router = APIRouter()
 
@@ -16,7 +17,12 @@ def _kv_path(request: Request) -> Path:
     return request.app.state.kv_path  # type: ignore[no-any-return]
 
 
+def _character_id(request: Request) -> str:
+    return request.app.state.character_id  # type: ignore[no-any-return]
+
+
 KvPath = Annotated[Path, Depends(_kv_path)]
+CharacterId = Annotated[str, Depends(_character_id)]
 
 
 @router.get("/stats", response_model=schemas.StatsResponse)
@@ -80,6 +86,180 @@ def get_orphans(
     scope: Literal["active", "archived", "all"] = "active",
 ) -> schemas.OrphansResponse:
     return schemas.OrphansResponse.model_validate(queries.get_orphans(kv_path, scope))
+
+
+def _raise_board_error(exc: ValueError) -> Never:
+    detail = str(exc)
+    if "not found" in detail:
+        raise HTTPException(status_code=404, detail=detail) from exc
+    if detail.startswith("stale "):
+        raise HTTPException(status_code=409, detail=detail) from exc
+    raise HTTPException(status_code=400, detail=detail) from exc
+
+
+@router.get("/board/spaces", response_model=schemas.BoardSpacesResponse)
+def board_spaces(character_id: CharacterId) -> schemas.BoardSpacesResponse:
+    return schemas.BoardSpacesResponse.model_validate(
+        {"spaces": board_core.list_spaces(character_id=character_id)}
+    )
+
+
+@router.get("/board/threads", response_model=schemas.BoardThreadsResponse)
+def board_threads(
+    character_id: CharacterId,
+    space_id: int | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> schemas.BoardThreadsResponse:
+    try:
+        rows = board_core.list_threads(
+            character_id=character_id,
+            space_id=space_id,
+            status=status,
+            limit=limit,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardThreadsResponse.model_validate({"threads": rows})
+
+
+@router.get("/board/threads/{thread_id}", response_model=schemas.BoardThreadDetail)
+def board_thread_detail(
+    thread_id: int,
+    character_id: CharacterId,
+) -> schemas.BoardThreadDetail:
+    try:
+        result = board_core.get_thread(
+            character_id=character_id,
+            thread_id=thread_id,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardThreadDetail.model_validate(result)
+
+
+@router.get("/board/search", response_model=schemas.BoardSearchResponse)
+def board_search(
+    q: str,
+    character_id: CharacterId,
+    limit: int = 20,
+) -> schemas.BoardSearchResponse:
+    try:
+        results = board_core.search_board(
+            character_id=character_id,
+            query=q,
+            limit=limit,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardSearchResponse.model_validate({"results": results})
+
+
+@router.post("/board/spaces", response_model=schemas.BoardCreateSpaceResponse)
+def board_create_space(
+    payload: schemas.BoardCreateSpaceRequest,
+    character_id: CharacterId,
+) -> schemas.BoardCreateSpaceResponse:
+    try:
+        result = board_core.create_space(
+            character_id=character_id,
+            name=payload.name,
+            description=payload.description,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardCreateSpaceResponse.model_validate(result)
+
+
+@router.post("/board/threads", response_model=schemas.BoardCreateThreadResponse)
+def board_create_thread(
+    payload: schemas.BoardCreateThreadRequest,
+    character_id: CharacterId,
+) -> schemas.BoardCreateThreadResponse:
+    try:
+        result = board_core.create_thread(
+            character_id=character_id,
+            space_id=payload.space_id,
+            title=payload.title,
+            author_kind=payload.author_kind,
+            author_display_name=payload.author_display_name,
+            author_external_subject=payload.author_external_subject,
+            initial_post=payload.initial_post,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardCreateThreadResponse.model_validate(result)
+
+
+@router.post(
+    "/board/threads/{thread_id}/posts",
+    response_model=schemas.BoardPostResponse,
+)
+def board_add_post(
+    thread_id: int,
+    payload: schemas.BoardPostRequest,
+    character_id: CharacterId,
+) -> schemas.BoardPostResponse:
+    try:
+        result = board_core.add_post(
+            character_id=character_id,
+            thread_id=thread_id,
+            body=payload.body,
+            author_kind=payload.author_kind,
+            author_display_name=payload.author_display_name,
+            author_external_subject=payload.author_external_subject,
+            kind=payload.kind,
+            parent_post_id=payload.parent_post_id,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardPostResponse.model_validate(result)
+
+
+@router.patch("/board/posts/{post_id}", response_model=schemas.BoardEditPostResponse)
+def board_edit_post(
+    post_id: int,
+    payload: schemas.BoardEditPostRequest,
+    character_id: CharacterId,
+) -> schemas.BoardEditPostResponse:
+    try:
+        result = board_core.edit_post(
+            character_id=character_id,
+            post_id=post_id,
+            body=payload.body,
+            expected_revision=payload.expected_revision,
+            editor_kind=payload.editor_kind,
+            editor_display_name=payload.editor_display_name,
+            editor_external_subject=payload.editor_external_subject,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardEditPostResponse.model_validate(result)
+
+
+@router.post(
+    "/board/threads/{thread_id}/organize",
+    response_model=schemas.BoardOrganizeResponse,
+)
+def board_organize_thread(
+    thread_id: int,
+    payload: schemas.BoardOrganizeRequest,
+    character_id: CharacterId,
+) -> schemas.BoardOrganizeResponse:
+    try:
+        result = board_core.organize_thread(
+            character_id=character_id,
+            thread_id=thread_id,
+            summary=payload.summary,
+            source_post_ids=payload.source_post_ids,
+            expected_thread_version=payload.expected_thread_version,
+            author_kind=payload.author_kind,
+            author_display_name=payload.author_display_name,
+            author_external_subject=payload.author_external_subject,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardOrganizeResponse.model_validate(result)
 
 
 def _reembed_entity(request: Request, entity_id: int, name: str, description: str) -> None:

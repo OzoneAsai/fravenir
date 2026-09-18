@@ -1308,14 +1308,11 @@ def serve(
     effective_host = host or config.server.host
     effective_port = port if port is not None else config.server.port
 
+    server = build_server(config)
     if effective_transport == "stdio":
-        server = build_server(config)
         log.info("mcp server starting", character_id=character_id, transport="stdio")
         server.run(transport="stdio")
     else:
-        # Pass host/port at FastMCP construction so DNS-rebinding protection
-        # is auto-selected correctly (on for localhost, off otherwise).
-        server = build_server(config, host=effective_host, port=effective_port)
         log.info(
             "mcp server starting",
             character_id=character_id,
@@ -1323,7 +1320,11 @@ def serve(
             host=effective_host,
             port=effective_port,
         )
-        server.run(transport=cast(Literal["sse", "streamable-http"], effective_transport))
+        server.run(
+            transport=cast(Literal["sse", "streamable-http"], effective_transport),
+            host=effective_host,
+            port=effective_port,
+        )
 
 
 @main.command("admin-serve")

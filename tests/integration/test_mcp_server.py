@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from mcp.shared.memory import create_connected_server_and_client_session
+from mcp import Client
 from mcp.types import TextContent
 
 from fravenir.schemas.config import AppConfig, CharacterConfig, ExtractionConfig
@@ -48,7 +48,7 @@ def _init_character(tmp_project: Path, char_id: str) -> AppConfig:
 
 def _parse(result: object) -> object:
     """CallToolResult の structuredContent / テキストを扱いやすい形に整形する。"""
-    sc = getattr(result, "structuredContent", None)
+    sc = getattr(result, "structured_content", None)
     if isinstance(sc, dict):
         # FastMCPは dict 戻り値を {"result": ...} にラップすることがある
         if set(sc.keys()) == {"result"}:
@@ -65,16 +65,34 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_smoke")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         listed = await session.list_tools()
 
     names = sorted(t.name for t in listed.tools)
     assert names == [
+        "board_create_space",
+        "board_create_thread",
+        "board_edit_post",
+        "board_get_post_revision",
+        "board_get_thread",
+        "board_list_spaces",
+        "board_list_threads",
+        "board_organize_thread",
+        "board_post",
+        "board_post_sources",
+        "board_search",
+        "graph_get_node",
+        "graph_link",
+        "graph_neighbors",
+        "graph_search",
+        "graph_unlink",
         "memory_compact",
         "memory_delete",
+        "memory_derive",
         "memory_explore",
         "memory_get",
         "memory_search",
+        "memory_sources",
         "memory_trace",
         "memory_write",
     ]
@@ -85,7 +103,7 @@ async def test_mcp_write_search_roundtrip(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_rw")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         written = _parse(
             await session.call_tool(
                 "memory_write",
@@ -109,7 +127,7 @@ async def test_mcp_get_delete_trace(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_gdt")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         written = _parse(
             await session.call_tool(
                 "memory_write", {"content": "削除して辿るよ", "kind": "facts"}
@@ -147,7 +165,7 @@ async def test_mcp_search_include_archived_roundtrip(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_archived")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         written = _parse(
             await session.call_tool(
                 "memory_write",
@@ -193,7 +211,7 @@ async def test_mcp_compact_stub(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_compact")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         result = _parse(await session.call_tool("memory_compact", {"dry_run": True}))
 
     assert isinstance(result, dict)
@@ -208,7 +226,7 @@ async def test_mcp_explore_episode_node(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_explore_ep")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         written = _parse(
             await session.call_tool(
                 "memory_write",
@@ -272,7 +290,7 @@ async def test_mcp_explore_entity_with_neighbors(tmp_project: Path) -> None:
     kv.close()
 
     server = build_server(config, embedder=_stub_embedder())
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         explored = _parse(
             await session.call_tool(
                 "memory_explore",
@@ -329,7 +347,7 @@ async def test_mcp_explore_exclude_entity_ids(tmp_project: Path) -> None:
     kv.close()
 
     server = build_server(config, embedder=_stub_embedder())
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         explored = _parse(
             await session.call_tool(
                 "memory_explore",
@@ -389,7 +407,7 @@ async def test_mcp_explore_exclude_episode_ids(tmp_project: Path) -> None:
     kv.close()
 
     server = build_server(config, embedder=_stub_embedder())
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         explored = _parse(
             await session.call_tool(
                 "memory_explore",
@@ -446,7 +464,7 @@ async def test_mcp_explore_include_archived(tmp_project: Path) -> None:
     kv.close()
 
     server = build_server(config, embedder=_stub_embedder())
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         excluded = _parse(
             await session.call_tool(
                 "memory_explore",
@@ -507,7 +525,7 @@ async def test_mcp_explore_include_suppressed(tmp_project: Path) -> None:
     kv.close()
 
     server = build_server(config, embedder=_stub_embedder())
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         excluded = _parse(
             await session.call_tool(
                 "memory_explore",
@@ -537,14 +555,14 @@ async def test_mcp_explore_error_node_not_found(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_explore_err")
     server = build_server(config, embedder=_stub_embedder())
 
-    async with create_connected_server_and_client_session(server) as session:
+    async with Client(server) as session:
         result = await session.call_tool(
             "memory_explore",
             {"node_type": "entity", "node_id": 999},
         )
 
     # MCP の tool error として返る
-    assert getattr(result, "isError", False) is True
+    assert getattr(result, "is_error", False) is True
     content = getattr(result, "content", None)
     assert content
     text = content[0].text if hasattr(content[0], "text") else ""

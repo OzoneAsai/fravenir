@@ -129,6 +129,89 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_target
     ON admin_audit_log(target_type, target_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_created
     ON admin_audit_log(created_at);
+
+
+-- Board/source layer: human and agent-authored source material.
+CREATE TABLE IF NOT EXISTS actors (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind             TEXT NOT NULL CHECK (kind IN ('human', 'agent', 'system')),
+    display_name     TEXT NOT NULL,
+    external_subject TEXT,
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_actors_external_subject
+    ON actors(external_subject) WHERE external_subject IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS spaces (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS threads (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    space_id    INTEGER NOT NULL REFERENCES spaces(id),
+    title       TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'open',
+    created_by  INTEGER REFERENCES actors(id),
+    version     INTEGER NOT NULL DEFAULT 1,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_threads_space ON threads(space_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_threads_status ON threads(status);
+
+CREATE TABLE IF NOT EXISTS posts (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id      INTEGER NOT NULL REFERENCES threads(id),
+    parent_post_id INTEGER REFERENCES posts(id),
+    author_id      INTEGER REFERENCES actors(id),
+    kind           TEXT NOT NULL DEFAULT 'message'
+                   CHECK (kind IN ('message', 'summary', 'decision', 'note')),
+    body           TEXT NOT NULL,
+    revision       INTEGER NOT NULL DEFAULT 1,
+    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    edited_at      TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_posts_thread ON posts(thread_id, id);
+CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_post_id);
+
+CREATE TABLE IF NOT EXISTS post_revisions (
+    post_id    INTEGER NOT NULL REFERENCES posts(id),
+    revision   INTEGER NOT NULL,
+    body       TEXT NOT NULL,
+    edited_at  TIMESTAMP NOT NULL,
+    editor_id  INTEGER REFERENCES actors(id),
+    PRIMARY KEY (post_id, revision)
+);
+
+
+CREATE TABLE IF NOT EXISTS episode_sources (
+    episode_id       INTEGER NOT NULL REFERENCES episodes(id),
+    source_type      TEXT NOT NULL,
+    source_id        INTEGER NOT NULL,
+    source_revision  INTEGER,
+    relation         TEXT NOT NULL DEFAULT 'derived_from',
+    actor_id         INTEGER REFERENCES actors(id),
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (episode_id, source_type, source_id, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_episode_sources_source
+    ON episode_sources(source_type, source_id);
+
+
+CREATE TABLE IF NOT EXISTS post_sources (
+    post_id          INTEGER NOT NULL REFERENCES posts(id),
+    source_post_id   INTEGER NOT NULL REFERENCES posts(id),
+    source_revision  INTEGER NOT NULL,
+    relation         TEXT NOT NULL DEFAULT 'derived_from',
+    actor_id         INTEGER REFERENCES actors(id),
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (post_id, source_post_id, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_post_sources_source
+    ON post_sources(source_post_id);
 """
 
 # sqlite-vec virtual tables: 768 dimensions (ruri-v3-310m)

@@ -1,5 +1,7 @@
 """Pydantic v2 schemas for admin UI API responses."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -278,3 +280,155 @@ class AuditLogEntry(BaseModel):
 
 class AuditLogResponse(BaseModel):
     entries: list[AuditLogEntry]
+
+
+class BoardSpaceItem(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    created_at: str
+    thread_count: int
+
+
+class BoardSpacesResponse(BaseModel):
+    spaces: list[BoardSpaceItem]
+
+
+class BoardThreadItem(BaseModel):
+    id: int
+    space_id: int
+    title: str
+    status: str
+    version: int
+    created_at: str
+    updated_at: str
+    post_count: int
+
+
+class BoardThreadsResponse(BaseModel):
+    threads: list[BoardThreadItem]
+
+
+class BoardThreadMeta(BaseModel):
+    id: int
+    space_id: int
+    title: str
+    status: str
+    version: int
+    created_at: str
+    updated_at: str
+    created_by_id: int | None
+    created_by_kind: str | None
+    created_by_name: str | None
+
+
+class BoardPostItem(BaseModel):
+    id: int
+    parent_post_id: int | None
+    kind: str
+    body: str
+    revision: int
+    created_at: str
+    edited_at: str | None
+    author_id: int | None
+    author_kind: str | None
+    author_name: str | None
+
+
+class BoardThreadDetail(BaseModel):
+    thread: BoardThreadMeta
+    posts: list[BoardPostItem]
+
+
+class BoardCreateSpaceRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class BoardCreateSpaceResponse(BaseModel):
+    space_id: int
+    name: str
+    description: str | None
+
+
+class BoardCreateThreadRequest(BaseModel):
+    space_id: int
+    title: str = Field(min_length=1, max_length=300)
+    author_display_name: str = Field(min_length=1, max_length=128)
+    author_kind: Literal["human", "agent", "system"] = "human"
+    author_external_subject: str | None = Field(default=None, max_length=512)
+    initial_post: str | None = Field(default=None, max_length=20000)
+
+
+class BoardCreateThreadResponse(BaseModel):
+    thread_id: int
+    space_id: int
+    title: str
+    version: int
+    initial_post_id: int | None
+
+
+class BoardPostRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=20000)
+    author_display_name: str = Field(min_length=1, max_length=128)
+    author_kind: Literal["human", "agent", "system"] = "human"
+    author_external_subject: str | None = Field(default=None, max_length=512)
+    kind: Literal["message", "summary", "decision", "note"] = "message"
+    parent_post_id: int | None = None
+
+
+class BoardPostResponse(BaseModel):
+    post_id: int
+    thread_id: int
+    thread_version: int
+    revision: int
+
+
+class BoardEditPostRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=20000)
+    expected_revision: int = Field(ge=1)
+    editor_display_name: str = Field(min_length=1, max_length=128)
+    editor_kind: Literal["human", "agent", "system"] = "human"
+    editor_external_subject: str | None = Field(default=None, max_length=512)
+
+
+class BoardEditPostResponse(BaseModel):
+    post_id: int
+    revision: int
+    changed: bool
+    thread_id: int | None = None
+    thread_version: int | None = None
+
+
+class BoardSourcePostRevision(BaseModel):
+    post_id: int
+    revision: int
+
+
+class BoardOrganizeRequest(BaseModel):
+    summary: str = Field(min_length=1, max_length=20000)
+    source_post_ids: list[int] = Field(min_length=1, max_length=200)
+    expected_thread_version: int = Field(ge=1)
+    author_display_name: str = Field(min_length=1, max_length=128)
+    author_kind: Literal["human", "agent", "system"] = "agent"
+    author_external_subject: str | None = Field(default=None, max_length=512)
+
+
+class BoardOrganizeResponse(BaseModel):
+    thread_id: int
+    summary_post_id: int
+    thread_version: int
+    source_posts: list[BoardSourcePostRevision]
+
+
+class BoardSearchItem(BaseModel):
+    result_type: str
+    id: int
+    thread_id: int
+    title: str
+    body: str | None
+    timestamp: str
+
+
+class BoardSearchResponse(BaseModel):
+    results: list[BoardSearchItem]
