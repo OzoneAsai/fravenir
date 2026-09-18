@@ -27,6 +27,13 @@ def _connect(character_id: str) -> sqlite3.Connection:
     return conn
 
 
+def _lastrowid(cursor: sqlite3.Cursor) -> int:
+    value = cursor.lastrowid
+    if value is None:
+        raise RuntimeError("sqlite insert did not return a row id")
+    return int(value)
+
+
 def _actor_id(
     conn: sqlite3.Connection,
     *,
@@ -57,7 +64,7 @@ def _actor_id(
         "INSERT INTO actors (kind, display_name, external_subject) VALUES (?, ?, ?)",
         (kind, display_name.strip(), external_subject),
     )
-    return int(cur.lastrowid)
+    return _lastrowid(cur)
 
 
 def ensure_actor(
@@ -100,7 +107,7 @@ def create_space(
         )
         conn.commit()
         return {
-            "space_id": int(cur.lastrowid),
+            "space_id": _lastrowid(cur),
             "name": clean_name,
             "description": description,
         }
@@ -162,7 +169,7 @@ def create_thread(
             """,
             (space_id, clean_title, actor_id, now, now),
         )
-        thread_id = int(cur.lastrowid)
+        thread_id = _lastrowid(cur)
 
         post_id: int | None = None
         if initial_post is not None and initial_post.strip():
@@ -174,7 +181,7 @@ def create_thread(
                 """,
                 (thread_id, actor_id, initial_post.strip(), now),
             )
-            post_id = int(pcur.lastrowid)
+            post_id = _lastrowid(pcur)
         conn.commit()
         return {
             "thread_id": thread_id,
@@ -243,7 +250,7 @@ def add_post(
         )
         conn.commit()
         return {
-            "post_id": int(cur.lastrowid),
+            "post_id": _lastrowid(cur),
             "thread_id": thread_id,
             "thread_version": next_version,
             "revision": 1,
