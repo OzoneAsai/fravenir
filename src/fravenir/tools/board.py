@@ -41,6 +41,22 @@ def register_board_tools(mcp: MCPServer, *, character_id: str) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
     )
+    def board_get_post_revision(
+        post_id: int,
+        revision: int | None = None,
+    ) -> dict[str, object]:
+        """postの現在または指定revisionの原文を取得する。"""
+        return _as_tool_error(
+            lambda: _board.get_post_revision(
+                character_id=character_id,
+                post_id=post_id,
+                revision=revision,
+            )
+        )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
+    )
     def board_list_spaces() -> list[dict[str, object]]:
         """利用可能なspaceとthread数を一覧する。"""
         return _as_tool_error(lambda: _board.list_spaces(character_id=character_id))
