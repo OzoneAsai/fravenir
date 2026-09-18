@@ -54,6 +54,7 @@ def build_subgraph_from_seeds(
             FROM relations
             WHERE valid_to IS NULL
               AND src_type = 'entity'
+              AND dst_type IN ('entity', 'episode')
               AND src_id IN ({placeholders})
             """,
             entity_frontier,
@@ -80,6 +81,7 @@ def fan_out_of(conn: sqlite3.Connection, entity_id: int) -> int:
         SELECT COUNT(*) FROM relations
         WHERE valid_to IS NULL
           AND src_type = 'entity'
+          AND dst_type IN ('entity', 'episode')
           AND src_id = ?
         """,
         (entity_id,),
