@@ -440,13 +440,7 @@ def search_nodes(
                     }
                 )
 
-        candidates.sort(
-            key=lambda item: (
-                -int(item["score"]),
-                str(item["type"]),
-                int(item["id"]),
-            )
-        )
+        candidates.sort(key=_search_sort_key)
         return candidates[:limit]
     finally:
         conn.close()
@@ -464,3 +458,12 @@ def _text_match_score(query: str, *texts: str) -> int:
         elif needle in folded:
             score = max(score, 1)
     return score
+
+
+def _search_sort_key(item: dict[str, object]) -> tuple[int, str, int]:
+    score = item.get("score")
+    node_id = item.get("id")
+    node_type = item.get("type")
+    if not isinstance(score, int) or not isinstance(node_id, int) or not isinstance(node_type, str):
+        raise RuntimeError("invalid graph search candidate")
+    return (-score, node_type, node_id)
