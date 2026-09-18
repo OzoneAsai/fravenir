@@ -90,6 +90,60 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_mcp_board_roundtrip(tmp_project: Path) -> None:
+    config = _init_character(tmp_project, "mcp_board")
+    server = build_server(config, embedder=_stub_embedder())
+
+    async with create_connected_server_and_client_session(server) as session:
+        actor = _parse(
+            await session.call_tool(
+                "board_create_actor",
+                {"display_name": "ChatGPT", "kind": "agent"},
+            )
+        )
+        assert isinstance(actor, dict)
+        space = _parse(
+            await session.call_tool(
+                "board_create_space",
+                {"slug": "general", "name": "General", "created_by": actor["id"]},
+            )
+        )
+        assert isinstance(space, dict)
+        thread = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {
+                    "space_id": space["id"],
+                    "title": "整理対象",
+                    "body": "原典は消さない",
+                    "created_by": actor["id"],
+                },
+            )
+        )
+        assert isinstance(thread, dict)
+        posted = _parse(
+            await session.call_tool(
+                "board_post",
+                {
+                    "thread_id": thread["id"],
+                    "body": "グラフ整理へつなぐ",
+                    "author_id": actor["id"],
+                    "expected_version": 1,
+                },
+            )
+        )
+        assert isinstance(posted, dict)
+        assert posted["thread_version"] == 2
+
+        got = _parse(
+            await session.call_tool("board_get_thread", {"thread_id": thread["id"]})
+        )
+        assert isinstance(got, dict)
+        assert got["version"] == 2
+        assert len(got["posts"]) == 2
+
+
+@pytest.mark.anyio
 async def test_mcp_write_search_roundtrip(tmp_project: Path) -> None:
     config = _init_character(tmp_project, "mcp_rw")
     server = build_server(config, embedder=_stub_embedder())
