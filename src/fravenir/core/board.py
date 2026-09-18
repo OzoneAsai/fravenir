@@ -36,6 +36,13 @@ def _as_dict(row: sqlite3.Row) -> dict[str, object]:
     return dict(row)
 
 
+def _lastrowid(cursor: sqlite3.Cursor) -> int:
+    value = cursor.lastrowid
+    if value is None:
+        raise RuntimeError("INSERT did not produce a row id")
+    return value
+
+
 def board_create_actor(
     *,
     character_id: str,
@@ -142,7 +149,7 @@ def board_create_thread(
             """,
             (space_id, title, created_by, now, now),
         )
-        thread_id = int(cur.lastrowid)
+        thread_id = _lastrowid(cur)
         link_relation_in_conn(
             conn,
             src_type="space",
@@ -160,7 +167,7 @@ def board_create_thread(
                 """,
                 (thread_id, created_by, body.strip(), now),
             )
-            post_id = int(post_cur.lastrowid)
+            post_id = _lastrowid(post_cur)
             link_relation_in_conn(
                 conn,
                 src_type="thread",
@@ -300,7 +307,7 @@ def board_post(
             """,
             (thread_id, parent_post_id, author_id, kind, body, now),
         )
-        post_id = int(cur.lastrowid)
+        post_id = _lastrowid(cur)
         link_relation_in_conn(
             conn,
             src_type="thread",
