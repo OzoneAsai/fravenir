@@ -159,6 +159,49 @@ def register_board_tools(mcp: MCPServer, *, character_id: str) -> None:
         )
 
     @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
+    def board_organize_thread(
+        thread_id: int,
+        summary: str,
+        source_post_ids: list[int],
+        expected_thread_version: int,
+        author_display_name: str,
+        author_kind: Literal["human", "agent", "system"] = "agent",
+        author_external_subject: str | None = None,
+    ) -> dict[str, object]:
+        """threadを原典保持のままsummary Postへ整理する。"""
+        return _as_tool_error(
+            lambda: _board.organize_thread(
+                character_id=character_id,
+                thread_id=thread_id,
+                summary=summary,
+                source_post_ids=source_post_ids,
+                expected_thread_version=expected_thread_version,
+                author_kind=author_kind,
+                author_display_name=author_display_name,
+                author_external_subject=author_external_subject,
+            )
+        )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
+    )
+    def board_post_sources(post_id: int) -> list[dict[str, object]]:
+        """summary等のPostが参照した原典Post revisionを取得する。"""
+        return _as_tool_error(
+            lambda: _board.get_post_sources(
+                character_id=character_id,
+                post_id=post_id,
+            )
+        )
+
+    @mcp.tool(
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
     )
     def board_search(query: str, limit: int = 20) -> list[dict[str, object]]:
