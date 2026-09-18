@@ -10,7 +10,8 @@ from __future__ import annotations
 from typing import Literal
 
 import structlog
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
+from mcp.types import ToolAnnotations
 
 from fravenir.core.delete import memory_delete as _core_delete
 from fravenir.core.explore import memory_explore as _core_explore
@@ -26,7 +27,7 @@ _logger = structlog.get_logger(__name__)
 
 
 def register_memory_tools(
-    mcp: FastMCP,
+    mcp: MCPServer,
     *,
     character_id: str,
     config: AppConfig,
@@ -35,7 +36,14 @@ def register_memory_tools(
 ) -> None:
     """Register the existing memory tool surface without changing behavior."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
     def memory_write(
         content: str,
         kind: Literal["facts", "state", "emo"] = "facts",
@@ -58,7 +66,14 @@ def register_memory_tools(
             _logger.exception("memory_write_error", error=str(e))
             raise RuntimeError("Internal server error in memory_write") from None
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
     def memory_search(
         query: str,
         limit: int = 5,
@@ -84,7 +99,9 @@ def register_memory_tools(
             _logger.exception("memory_search_error", error=str(e))
             raise RuntimeError("Internal server error in memory_search") from None
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
+    )
     def memory_get(limit: int = 5) -> dict[str, object]:
         """自己紹介・最近の状態を返す（v1互換API）。"""
         try:
@@ -98,7 +115,14 @@ def register_memory_tools(
             _logger.exception("memory_get_error", error=str(e))
             raise RuntimeError("Internal server error in memory_get") from None
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
     def memory_delete(episode_id: int, reason: str) -> dict[str, object]:
         """論理削除（valid_to=now を立てるだけ、行は残る）。"""
         try:
@@ -112,7 +136,9 @@ def register_memory_tools(
             _logger.exception("memory_delete_error", error=str(e))
             raise RuntimeError("Internal server error in memory_delete") from None
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
+    )
     def memory_trace(episode_id: int) -> dict[str, object]:
         """supersedes チェーンを遡及する。"""
         try:
@@ -125,7 +151,14 @@ def register_memory_tools(
             _logger.exception("memory_trace_error", error=str(e))
             raise RuntimeError("Internal server error in memory_trace") from None
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
     def memory_explore(
         node_type: Literal["episode", "entity"],
         node_id: int,
@@ -157,7 +190,14 @@ def register_memory_tools(
             _logger.exception("memory_explore_error", error=str(e))
             raise RuntimeError("Internal server error in memory_explore") from None
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=False,
+            open_world_hint=False,
+        )
+    )
     def memory_compact(dry_run: bool = False) -> dict[str, object]:
         """夜バッチを手動起動。"""
         from fravenir.core.compact import run_compact
