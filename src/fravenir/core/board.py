@@ -349,6 +349,152 @@ def edit_post(
         conn.close()
 
 
+def organize_thread(
+    *,
+    character_id: str,
+    thread_id: int,
+    summary: str,
+    source_post_ids: list[int],
+    expected_thread_version: int,
+    author_kind: ActorKind,
+    author_display_name: str,
+    author_external_subject: str | None = None,
+) -> dict[str, object]:
+    """Append a summary post derived from exact source post revisions.
+
+    The operation is optimistic-concurrency guarded by the thread version and is
+    additive: source posts are never changed or archived.
+    """
+    clean_summary = summary.strip()
+    if not clean_summary:
+        raise ValueError("summary must not be empty")
+    if expected_thread_version < 1:
+        raise ValueError("expected_thread_version must be >= 1")
+    if not source_post_ids:
+        raise ValueError("source_post_ids must not be empty")
+    if len(set(source_post_ids)) != len(source_post_ids):
+        raise ValueError("source_post_ids must not contain duplicates")
+
+    conn = _connect(character_id)
+    try:
+        thread = conn.execute(
+            "SELECT id, version FROM threads WHERE id = ?",
+            (thread_id,),
+        ).fetchone()
+        if thread is None:
+            raise ValueError(f"thread not found: {thread_id}")
+        current_version = int(thread["version"])
+        if current_version != expected_thread_version:
+            raise ValueError(
+                "stale thread version: "
+                f"expected {expected_thread_version}, current {current_version}"
+            )
+
+        sources: list[tuple[int, int]] = []
+        for post_id in source_post_ids:
+            row = conn.execute(
+                "SELECT id, thread_id, revision FROM posts WHERE id = ?",
+                (post_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"source post not found: {post_id}")
+            if int(row["thread_id"]) != thread_id:
+                raise ValueError(f"source post belongs to a different thread: {post_id}")
+            sources.append((int(row["id"]), int(row["revision"])))
+
+        actor_id = _actor_id(
+            conn,
+            kind=author_kind,
+            display_name=author_display_name,
+            external_subject=author_external_subject,
+        )
+        now = datetime.now(UTC).isoformat()
+        cur = conn.execute(
+            """
+            INSERT INTO posts
+                (thread_id, author_id, kind, body, revision, created_at)
+            VALUES (?, ?, 'summary', ?, 1, ?)
+            """,
+            (thread_id, actor_id, clean_summary, now),
+        )
+        summary_post_id = _lastrowid(cur)
+
+        conn.executemany(
+            """
+            INSERT INTO post_sources
+                (post_id, source_post_id, source_revision, relation, actor_id)
+            VALUES (?, ?, ?, 'derived_from', ?)
+            """,
+            [
+                (summary_post_id, source_post_id, source_revision, actor_id)
+                for source_post_id, source_revision in sources
+            ],
+        )
+
+        conn.execute(
+            """
+            INSERT INTO relations
+                (src_type, src_id, dst_type, dst_id, predicate, strength, valid_from)
+            VALUES ('thread', ?, 'post', ?, 'contains', 1.0, ?)
+            """,
+            (thread_id, summary_post_id, now),
+        )
+        conn.executemany(
+            """
+            INSERT INTO relations
+                (src_type, src_id, dst_type, dst_id, predicate, strength, valid_from)
+            VALUES ('post', ?, 'post', ?, 'derived_from', 1.0, ?)
+            """,
+            [
+                (summary_post_id, source_post_id, now)
+                for source_post_id, _source_revision in sources
+            ],
+        )
+
+        next_version = current_version + 1
+        conn.execute(
+            "UPDATE threads SET version = ?, updated_at = ? WHERE id = ?",
+            (next_version, now, thread_id),
+        )
+        conn.commit()
+        return {
+            "thread_id": thread_id,
+            "summary_post_id": summary_post_id,
+            "thread_version": next_version,
+            "source_posts": [
+                {"post_id": source_post_id, "revision": source_revision}
+                for source_post_id, source_revision in sources
+            ],
+        }
+    finally:
+        conn.close()
+
+
+def get_post_sources(
+    *,
+    character_id: str,
+    post_id: int,
+) -> list[dict[str, object]]:
+    """Return exact source post revisions used to derive a post."""
+    conn = _connect(character_id)
+    try:
+        rows = conn.execute(
+            """
+            SELECT ps.source_post_id, ps.source_revision, ps.relation, ps.created_at,
+                   a.id AS actor_id, a.kind AS actor_kind,
+                   a.display_name AS actor_name
+            FROM post_sources ps
+            LEFT JOIN actors a ON a.id = ps.actor_id
+            WHERE ps.post_id = ?
+            ORDER BY ps.source_post_id
+            """,
+            (post_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def get_thread(*, character_id: str, thread_id: int) -> dict[str, object]:
     conn = _connect(character_id)
     try:
