@@ -60,8 +60,6 @@ def _actor_id(
     return int(cur.lastrowid)
 
 
-
-
 def ensure_actor(
     *,
     character_id: str,
