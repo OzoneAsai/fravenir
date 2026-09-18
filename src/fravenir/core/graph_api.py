@@ -322,3 +322,145 @@ def invalidate_relation(
         return {"relation_id": relation_id, "valid_to": now, "changed": True}
     finally:
         conn.close()
+
+
+def search_nodes(
+    *,
+    character_id: str,
+    query: str,
+    node_types: list[NodeType] | None = None,
+    limit: int = 30,
+) -> list[dict[str, object]]:
+    """Search all local node classes with a simple deterministic text rank."""
+    clean = query.strip()
+    if not clean:
+        raise ValueError("query must not be empty")
+    if not 1 <= limit <= 100:
+        raise ValueError("limit must be between 1 and 100")
+
+    selected = list(node_types or ["entity", "episode", "thread", "post"])
+    if not selected:
+        raise ValueError("node_types must not be empty")
+    if len(set(selected)) != len(selected):
+        raise ValueError("node_types must not contain duplicates")
+
+    pattern = f"%{clean}%"
+    conn = _connect(character_id)
+    try:
+        candidates: list[dict[str, object]] = []
+
+        if "entity" in selected:
+            rows = conn.execute(
+                """
+                SELECT id, canonical_name, description
+                FROM entities
+                WHERE canonical_name LIKE ? OR COALESCE(description, '') LIKE ?
+                LIMIT ?
+                """,
+                (pattern, pattern, limit),
+            ).fetchall()
+            for row in rows:
+                name = str(row["canonical_name"])
+                description = str(row["description"] or "")
+                candidates.append(
+                    {
+                        "type": "entity",
+                        "id": int(row["id"]),
+                        "label": name,
+                        "snippet": description[:240],
+                        "score": _text_match_score(clean, name, description),
+                    }
+                )
+
+        if "episode" in selected:
+            rows = conn.execute(
+                """
+                SELECT id, content
+                FROM episodes
+                WHERE content LIKE ?
+                LIMIT ?
+                """,
+                (pattern, limit),
+            ).fetchall()
+            for row in rows:
+                content = str(row["content"])
+                candidates.append(
+                    {
+                        "type": "episode",
+                        "id": int(row["id"]),
+                        "label": content[:80],
+                        "snippet": content[:240],
+                        "score": _text_match_score(clean, content),
+                    }
+                )
+
+        if "thread" in selected:
+            rows = conn.execute(
+                """
+                SELECT id, title
+                FROM threads
+                WHERE title LIKE ?
+                LIMIT ?
+                """,
+                (pattern, limit),
+            ).fetchall()
+            for row in rows:
+                title = str(row["title"])
+                candidates.append(
+                    {
+                        "type": "thread",
+                        "id": int(row["id"]),
+                        "label": title,
+                        "snippet": title,
+                        "score": _text_match_score(clean, title),
+                    }
+                )
+
+        if "post" in selected:
+            rows = conn.execute(
+                """
+                SELECT id, thread_id, kind, body
+                FROM posts
+                WHERE body LIKE ?
+                LIMIT ?
+                """,
+                (pattern, limit),
+            ).fetchall()
+            for row in rows:
+                body = str(row["body"])
+                candidates.append(
+                    {
+                        "type": "post",
+                        "id": int(row["id"]),
+                        "thread_id": int(row["thread_id"]),
+                        "kind": str(row["kind"]),
+                        "label": body[:80],
+                        "snippet": body[:240],
+                        "score": _text_match_score(clean, body),
+                    }
+                )
+
+        candidates.sort(
+            key=lambda item: (
+                -int(item["score"]),
+                str(item["type"]),
+                int(item["id"]),
+            )
+        )
+        return candidates[:limit]
+    finally:
+        conn.close()
+
+
+def _text_match_score(query: str, *texts: str) -> int:
+    needle = query.casefold()
+    score = 0
+    for text in texts:
+        folded = text.casefold()
+        if folded == needle:
+            score = max(score, 3)
+        elif folded.startswith(needle):
+            score = max(score, 2)
+        elif needle in folded:
+            score = max(score, 1)
+    return score
