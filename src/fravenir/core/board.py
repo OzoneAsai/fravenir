@@ -7,6 +7,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Literal
 
+from fravenir.core.graph import link_relation_in_conn
 from fravenir.storage import paths
 
 ActorKind = Literal["human", "agent", "system"]
@@ -142,14 +143,31 @@ def board_create_thread(
             (space_id, title, created_by, now, now),
         )
         thread_id = int(cur.lastrowid)
+        link_relation_in_conn(
+            conn,
+            src_type="space",
+            src_id=space_id,
+            dst_type="thread",
+            dst_id=thread_id,
+            predicate="contains",
+        )
         if body is not None:
-            conn.execute(
+            post_cur = conn.execute(
                 """
                 INSERT INTO posts
                     (thread_id, parent_post_id, author_id, kind, body, revision, created_at)
                 VALUES (?, NULL, ?, 'message', ?, 1, ?)
                 """,
                 (thread_id, created_by, body.strip(), now),
+            )
+            post_id = int(post_cur.lastrowid)
+            link_relation_in_conn(
+                conn,
+                src_type="thread",
+                src_id=thread_id,
+                dst_type="post",
+                dst_id=post_id,
+                predicate="contains",
             )
         conn.commit()
     except Exception:
@@ -283,6 +301,23 @@ def board_post(
             (thread_id, parent_post_id, author_id, kind, body, now),
         )
         post_id = int(cur.lastrowid)
+        link_relation_in_conn(
+            conn,
+            src_type="thread",
+            src_id=thread_id,
+            dst_type="post",
+            dst_id=post_id,
+            predicate="contains",
+        )
+        if parent_post_id is not None:
+            link_relation_in_conn(
+                conn,
+                src_type="post",
+                src_id=post_id,
+                dst_type="post",
+                dst_id=parent_post_id,
+                predicate="reply_to",
+            )
         new_version = version + 1
         conn.execute(
             "UPDATE threads SET version = ?, updated_at = ? WHERE id = ?",
