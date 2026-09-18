@@ -79,6 +79,11 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
         "board_list_threads",
         "board_post",
         "board_search",
+        "graph_get_node",
+        "graph_invalidate_relation",
+        "graph_link",
+        "graph_neighbors",
+        "graph_search",
         "memory_compact",
         "memory_delete",
         "memory_explore",
@@ -141,6 +146,64 @@ async def test_mcp_board_roundtrip(tmp_project: Path) -> None:
         assert isinstance(got, dict)
         assert got["version"] == 2
         assert len(got["posts"]) == 2
+
+
+
+@pytest.mark.anyio
+async def test_mcp_graph_roundtrip(tmp_project: Path) -> None:
+    config = _init_character(tmp_project, "mcp_graph")
+    server = build_server(config, embedder=_stub_embedder())
+
+    async with create_connected_server_and_client_session(server) as session:
+        space = _parse(
+            await session.call_tool(
+                "board_create_space", {"slug": "graph", "name": "Graph"}
+            )
+        )
+        assert isinstance(space, dict)
+        left = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {"space_id": space["id"], "title": "Left"},
+            )
+        )
+        right = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {"space_id": space["id"], "title": "Right"},
+            )
+        )
+        assert isinstance(left, dict) and isinstance(right, dict)
+
+        linked = _parse(
+            await session.call_tool(
+                "graph_link",
+                {
+                    "src_type": "thread",
+                    "src_id": left["id"],
+                    "dst_type": "thread",
+                    "dst_id": right["id"],
+                    "predicate": "related_to",
+                },
+            )
+        )
+        assert isinstance(linked, dict)
+        assert linked["created"] is True
+
+        neighbors = _parse(
+            await session.call_tool(
+                "graph_neighbors",
+                {
+                    "node_type": "thread",
+                    "node_id": left["id"],
+                    "predicates": ["related_to"],
+                    "direction": "outgoing",
+                },
+            )
+        )
+        assert isinstance(neighbors, dict)
+        assert neighbors["count"] == 1
+        assert neighbors["neighbors"][0]["node"]["id"] == right["id"]
 
 
 @pytest.mark.anyio
