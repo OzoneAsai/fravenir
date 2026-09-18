@@ -99,8 +99,8 @@ def _raise_board_error(exc: ValueError) -> Never:
 
 @router.get("/board/spaces", response_model=schemas.BoardSpacesResponse)
 def board_spaces(character_id: CharacterId) -> schemas.BoardSpacesResponse:
-    return schemas.BoardSpacesResponse(
-        spaces=board_core.list_spaces(character_id=character_id)
+    return schemas.BoardSpacesResponse.model_validate(
+        {"spaces": board_core.list_spaces(character_id=character_id)}
     )
 
 
@@ -120,7 +120,7 @@ def board_threads(
         )
     except ValueError as exc:
         _raise_board_error(exc)
-    return schemas.BoardThreadsResponse(threads=rows)
+    return schemas.BoardThreadsResponse.model_validate({"threads": rows})
 
 
 @router.get("/board/threads/{thread_id}", response_model=schemas.BoardThreadDetail)
@@ -152,7 +152,7 @@ def board_search(
         )
     except ValueError as exc:
         _raise_board_error(exc)
-    return schemas.BoardSearchResponse(results=results)
+    return schemas.BoardSearchResponse.model_validate({"results": results})
 
 
 @router.post("/board/spaces", response_model=schemas.BoardCreateSpaceResponse)
