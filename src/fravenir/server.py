@@ -13,6 +13,7 @@ from fravenir.core.extraction import ExtractionClient
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
 from fravenir.tools.board import register_board_tools
+from fravenir.tools.graph import register_graph_tools
 from fravenir.tools.memory import register_memory_tools
 from fravenir.tools.provenance import register_provenance_tools
 
@@ -43,6 +44,7 @@ def build_server(
         extraction_client=ext,
     )
     register_board_tools(mcp, character_id=character_id)
+    register_graph_tools(mcp, character_id=character_id)
     register_provenance_tools(
         mcp,
         character_id=character_id,
