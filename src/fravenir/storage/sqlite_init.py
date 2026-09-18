@@ -157,7 +157,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vdb_relations USING vec0(
 def init_kv(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     try:
-        conn.executescript(_KV_DDL)
+        conn.executescript(_KV_DDL)\n        conn.executescript(BOARD_DDL)
         conn.commit()
     finally:
         conn.close()
