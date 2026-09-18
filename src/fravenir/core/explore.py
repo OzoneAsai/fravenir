@@ -359,7 +359,9 @@ def _fan_out_of_node(
 ) -> int:
     row = conn.execute(
         """SELECT COUNT(*) FROM relations
-        WHERE valid_to IS NULL AND src_type = ? AND src_id = ?""",
+        WHERE valid_to IS NULL
+          AND src_type = ? AND src_id = ?
+          AND dst_type IN ('entity', 'episode')""",
         (node_type, node_id),
     ).fetchone()
     return int(row[0]) if row else 0
