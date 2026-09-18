@@ -397,7 +397,8 @@ def main() -> None:
 
 @main.command("create-character")
 @click.argument("character_id", callback=_validate_character_id)
-@click.option("--config", "config_path", default=None, help="Path to config.yaml")@click.option("--seed", "seed_path", default=None, help="Path to seed.yaml")
+@click.option("--config", "config_path", default=None, help="Path to config.yaml")
+@click.option("--seed", "seed_path", default=None, help="Path to seed.yaml")
 def create_character(character_id: str, config_path: str | None, seed_path: str | None) -> None:
     """Create a new character and initialize its data directory."""
     _configure_logging("console", "INFO")
@@ -796,7 +797,8 @@ def init_character(
         added["episodes"] += added_episodes
         added["relations"] += added_via_extract
 
-    logger.info("init-character done", **added)    click.echo(
+    logger.info("init-character done", **added)
+    click.echo(
         f"✓ init-character '{character_id}': "
         f"added {added['entities']} entities, "
         f"{added['aliases']} aliases, {added['episodes']} episodes, "
@@ -1195,7 +1197,8 @@ def migrate_resolved_at_cmd(character_id: str, dry_run: bool, yes: bool) -> None
     _require_data_dir(character_id)
     db = kv_db_path(character_id)
 
-    preview = migrate(db, dry_run=True)    click.echo(f"Character: {character_id}  ({db})")
+    preview = migrate(db, dry_run=True)
+    click.echo(f"Character: {character_id}  ({db})")
     if preview.added_columns:
         click.echo(f"  - columns to add: {', '.join(preview.added_columns)}")
     else:
