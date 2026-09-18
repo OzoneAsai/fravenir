@@ -16,6 +16,7 @@ from fravenir.core.trace import memory_trace as _core_trace
 from fravenir.core.write import memory_write as _core_write
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
+from fravenir.schemas.provenance import SourceRef
 
 _logger = structlog.get_logger(__name__)
 
@@ -56,6 +57,36 @@ def register_memory_tools(
         except Exception as e:
             _logger.exception("memory_write_error", error=str(e))
             raise RuntimeError("Internal server error in memory_write") from None
+
+
+    @mcp.tool()
+    def memory_derive(
+        content: str,
+        sources: list[SourceRef],
+        kind: Literal["facts", "state", "emo"] = "facts",
+        importance: int = 1,
+        session_id: str | None = None,
+    ) -> dict[str, object]:
+        """原典ノードから整理済み記憶を作り、derived_from provenance を必ず残す。"""
+        if not sources:
+            raise ValueError("sources must not be empty")
+        try:
+            result = _core_write(
+                content=content,
+                kind=kind,
+                importance=importance,
+                session_id=session_id,
+                character_id=character_id,
+                config=config,
+                embedder=embedder,
+                extraction_client=extraction_client,
+                source_refs=[(source.type, source.id) for source in sources],
+            )
+            result["sources"] = [source.model_dump(mode="json") for source in sources]
+            return result
+        except Exception as e:
+            _logger.exception("memory_derive_error", error=str(e))
+            raise RuntimeError("Internal server error in memory_derive") from None
 
     @mcp.tool()
     def memory_search(
