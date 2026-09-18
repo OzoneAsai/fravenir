@@ -11,9 +11,11 @@ from fravenir.core.board import (
     create_space,
     create_thread,
     edit_post,
+    get_post_sources,
     get_thread,
     list_spaces,
     list_threads,
+    organize_thread,
     search_board,
 )
 from fravenir.storage.sqlite_init import init_kv
@@ -153,4 +155,63 @@ def test_edit_post_preserves_revision_and_rejects_stale_writer(tmp_project: Path
             expected_revision=1,
             editor_kind="agent",
             editor_display_name="Other agent",
+        )
+
+
+def test_organize_thread_preserves_exact_source_revisions(tmp_project: Path) -> None:
+    character_id = _init(tmp_project, "board_organize")
+    space = create_space(character_id=character_id, name="research")
+    thread = create_thread(
+        character_id=character_id,
+        space_id=int(space["space_id"]),
+        title="organize",
+        author_kind="human",
+        author_display_name="Ozone",
+        initial_post="first source",
+    )
+    added = add_post(
+        character_id=character_id,
+        thread_id=int(thread["thread_id"]),
+        body="second source",
+        author_kind="agent",
+        author_display_name="ChatGPT",
+    )
+    assert added["thread_version"] == 2
+
+    before = get_thread(character_id=character_id, thread_id=int(thread["thread_id"]))
+    source_ids = [int(post["id"]) for post in before["posts"]]
+
+    organized = organize_thread(
+        character_id=character_id,
+        thread_id=int(thread["thread_id"]),
+        summary="two sources summarized",
+        source_post_ids=source_ids,
+        expected_thread_version=2,
+        author_kind="agent",
+        author_display_name="Organizer",
+    )
+    assert organized["thread_version"] == 3
+
+    source_rows = get_post_sources(
+        character_id=character_id,
+        post_id=int(organized["summary_post_id"]),
+    )
+    assert [(row["source_post_id"], row["source_revision"]) for row in source_rows] == [
+        (source_ids[0], 1),
+        (source_ids[1], 1),
+    ]
+
+    after = get_thread(character_id=character_id, thread_id=int(thread["thread_id"]))
+    assert after["posts"][-1]["kind"] == "summary"
+    assert after["posts"][-1]["body"] == "two sources summarized"
+
+    with pytest.raises(ValueError, match="stale thread version"):
+        organize_thread(
+            character_id=character_id,
+            thread_id=int(thread["thread_id"]),
+            summary="stale summary",
+            source_post_ids=source_ids,
+            expected_thread_version=2,
+            author_kind="agent",
+            author_display_name="Stale organizer",
         )
