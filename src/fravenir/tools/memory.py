@@ -11,6 +11,7 @@ from typing import Literal
 
 import structlog
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from fravenir.core.delete import memory_delete as _core_delete
@@ -184,8 +185,8 @@ def register_memory_tools(
                 config=config,
             )
             return result.model_dump(mode="json")
-        except (ValueError, NotImplementedError):
-            raise
+        except (ValueError, NotImplementedError) as e:
+            raise ToolError(str(e)) from e
         except Exception as e:
             _logger.exception("memory_explore_error", error=str(e))
             raise RuntimeError("Internal server error in memory_explore") from None
