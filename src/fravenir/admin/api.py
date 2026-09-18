@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Never
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -88,7 +88,7 @@ def get_orphans(
     return schemas.OrphansResponse.model_validate(queries.get_orphans(kv_path, scope))
 
 
-def _raise_board_error(exc: ValueError) -> None:
+def _raise_board_error(exc: ValueError) -> Never:
     detail = str(exc)
     if "not found" in detail:
         raise HTTPException(status_code=404, detail=detail) from exc
