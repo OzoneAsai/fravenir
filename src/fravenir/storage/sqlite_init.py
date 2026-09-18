@@ -5,6 +5,8 @@ from pathlib import Path
 
 import sqlite_vec
 
+from fravenir.migrations.board import BOARD_DDL
+
 _KV_DDL = """\
 CREATE TABLE IF NOT EXISTS episodes (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
