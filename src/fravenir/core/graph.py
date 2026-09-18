@@ -154,6 +154,31 @@ def _graph_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+_RELATION_COLUMNS = (
+    "id",
+    "src_type",
+    "src_id",
+    "dst_type",
+    "dst_id",
+    "predicate",
+    "strength",
+    "fan_out",
+    "description",
+    "valid_from",
+    "valid_to",
+    "supersedes",
+    "created_at",
+)
+
+
+def _relation_to_dict(row: sqlite3.Row | tuple[object, ...]) -> dict[str, object]:
+    if isinstance(row, sqlite3.Row):
+        return dict(row)
+    if len(row) != len(_RELATION_COLUMNS):
+        raise ValueError("unexpected relations row shape")
+    return dict(zip(_RELATION_COLUMNS, row, strict=True))
+
+
 def _assert_node_type(node_type: str) -> NodeType:
     if node_type not in {"episode", "entity", "space", "thread", "post"}:
         raise ValueError(f"unsupported node type: {node_type!r}")
@@ -275,7 +300,7 @@ def link_relation_in_conn(
         (src_type, src_id, dst_type, dst_id, predicate),
     ).fetchone()
     if existing is not None:
-        return dict(existing), False
+        return _relation_to_dict(existing), False
 
     cur = conn.execute(
         """INSERT INTO relations
@@ -297,7 +322,7 @@ def link_relation_in_conn(
         "SELECT * FROM relations WHERE id = ?", (cur.lastrowid,)
     ).fetchone()
     assert row is not None
-    return dict(row), True
+    return _relation_to_dict(row), True
 
 
 def graph_link(
