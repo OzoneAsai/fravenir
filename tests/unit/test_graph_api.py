@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from fravenir.core.board import create_space, create_thread, get_thread
-from fravenir.core.graph_api import add_relation, get_neighbors, get_node, invalidate_relation
+from fravenir.core.graph_api import (
+    add_relation,
+    get_neighbors,
+    get_node,
+    invalidate_relation,
+    search_nodes,
+)
 from fravenir.storage.sqlite_init import init_kv
 
 
@@ -137,3 +143,31 @@ def test_graph_rejects_self_relation(tmp_project: Path) -> None:
             dst_id=int(thread["thread_id"]),
             predicate="related_to",
         )
+
+
+def test_graph_search_spans_thread_and_post(tmp_project: Path) -> None:
+    character_id = _init(tmp_project, "graph_search")
+    space = create_space(character_id=character_id, name="board")
+    thread = create_thread(
+        character_id=character_id,
+        space_id=int(space["space_id"]),
+        title="B193 finally analysis",
+        author_kind="human",
+        author_display_name="Ozone",
+        initial_post="SGET preparation evidence",
+    )
+
+    results = search_nodes(
+        character_id=character_id,
+        query="B193",
+    )
+    assert results[0]["type"] == "thread"
+    assert results[0]["id"] == thread["thread_id"]
+
+    post_results = search_nodes(
+        character_id=character_id,
+        query="SGET",
+        node_types=["post"],
+    )
+    assert len(post_results) == 1
+    assert post_results[0]["type"] == "post"
