@@ -89,6 +89,79 @@ def ensure_actor(
         conn.close()
 
 
+def get_post_revision(
+    *,
+    character_id: str,
+    post_id: int,
+    revision: int | None = None,
+) -> dict[str, object]:
+    """Return the exact body for a post revision.
+
+    If revision is omitted, the current revision is returned. Historical bodies
+    are read from post_revisions, which are written before every edit.
+    """
+    conn = _connect(character_id)
+    try:
+        post = conn.execute(
+            """
+            SELECT p.id, p.thread_id, p.parent_post_id, p.author_id, p.kind,
+                   p.body, p.revision, p.created_at, p.edited_at,
+                   a.kind AS author_kind, a.display_name AS author_name
+            FROM posts p
+            LEFT JOIN actors a ON a.id = p.author_id
+            WHERE p.id = ?
+            """,
+            (post_id,),
+        ).fetchone()
+        if post is None:
+            raise ValueError(f"post not found: {post_id}")
+
+        current_revision = int(post["revision"])
+        target_revision = current_revision if revision is None else revision
+        if target_revision < 1:
+            raise ValueError("revision must be >= 1")
+        if target_revision > current_revision:
+            raise ValueError(
+                f"post revision not found: post={post_id} revision={target_revision}"
+            )
+
+        if target_revision == current_revision:
+            body = str(post["body"])
+            edited_at = post["edited_at"]
+        else:
+            historical = conn.execute(
+                """
+                SELECT body, edited_at
+                FROM post_revisions
+                WHERE post_id = ? AND revision = ?
+                """,
+                (post_id, target_revision),
+            ).fetchone()
+            if historical is None:
+                raise ValueError(
+                    f"post revision not found: post={post_id} revision={target_revision}"
+                )
+            body = str(historical["body"])
+            edited_at = historical["edited_at"]
+
+        return {
+            "post_id": int(post["id"]),
+            "thread_id": int(post["thread_id"]),
+            "parent_post_id": post["parent_post_id"],
+            "kind": str(post["kind"]),
+            "revision": target_revision,
+            "current_revision": current_revision,
+            "body": body,
+            "author_id": post["author_id"],
+            "author_kind": post["author_kind"],
+            "author_name": post["author_name"],
+            "created_at": post["created_at"],
+            "edited_at": edited_at,
+        }
+    finally:
+        conn.close()
+
+
 def create_space(
     *,
     character_id: str,
