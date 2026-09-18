@@ -58,7 +58,6 @@ def register_memory_tools(
             _logger.exception("memory_write_error", error=str(e))
             raise RuntimeError("Internal server error in memory_write") from None
 
-
     @mcp.tool()
     def memory_derive(
         content: str,
