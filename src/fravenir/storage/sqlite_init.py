@@ -185,6 +185,20 @@ CREATE TABLE IF NOT EXISTS post_revisions (
     editor_id  INTEGER REFERENCES actors(id),
     PRIMARY KEY (post_id, revision)
 );
+
+
+CREATE TABLE IF NOT EXISTS episode_sources (
+    episode_id       INTEGER NOT NULL REFERENCES episodes(id),
+    source_type      TEXT NOT NULL,
+    source_id        INTEGER NOT NULL,
+    source_revision  INTEGER,
+    relation         TEXT NOT NULL DEFAULT 'derived_from',
+    actor_id         INTEGER REFERENCES actors(id),
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (episode_id, source_type, source_id, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_episode_sources_source
+    ON episode_sources(source_type, source_id);
 """
 
 # sqlite-vec virtual tables: 768 dimensions (ruri-v3-310m)
