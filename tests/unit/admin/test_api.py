@@ -462,3 +462,84 @@ class TestBasicAuth:
         with TestClient(app) as c:
             resp = c.get("/api/stats")
             assert resp.status_code == 200
+
+
+class TestBoardApi:
+    def test_board_crud_and_organize(self, client: TestClient) -> None:
+        space_resp = client.post(
+            "/api/board/spaces",
+            json={"name": "JADX", "description": "Decompiler work"},
+        )
+        assert space_resp.status_code == 200
+        space_id = space_resp.json()["space_id"]
+
+        thread_resp = client.post(
+            "/api/board/threads",
+            json={
+                "space_id": space_id,
+                "title": "finally reconstruction",
+                "author_display_name": "Ozone",
+                "author_kind": "human",
+                "initial_post": "B193 source",
+            },
+        )
+        assert thread_resp.status_code == 200
+        thread_id = thread_resp.json()["thread_id"]
+
+        post_resp = client.post(
+            f"/api/board/threads/{thread_id}/posts",
+            json={
+                "body": "SGET evidence",
+                "author_display_name": "ChatGPT",
+                "author_kind": "agent",
+            },
+        )
+        assert post_resp.status_code == 200
+        assert post_resp.json()["thread_version"] == 2
+
+        detail = client.get(f"/api/board/threads/{thread_id}")
+        assert detail.status_code == 200
+        detail_body = detail.json()
+        assert detail_body["thread"]["version"] == 2
+        source_post_ids = [post["id"] for post in detail_body["posts"]]
+
+        organize = client.post(
+            f"/api/board/threads/{thread_id}/organize",
+            json={
+                "summary": "B193 and SGET are related evidence.",
+                "source_post_ids": source_post_ids,
+                "expected_thread_version": 2,
+                "author_display_name": "Organizer",
+                "author_kind": "agent",
+            },
+        )
+        assert organize.status_code == 200
+        assert organize.json()["thread_version"] == 3
+
+        stale = client.post(
+            f"/api/board/threads/{thread_id}/organize",
+            json={
+                "summary": "stale",
+                "source_post_ids": source_post_ids,
+                "expected_thread_version": 2,
+                "author_display_name": "Organizer",
+                "author_kind": "agent",
+            },
+        )
+        assert stale.status_code == 409
+
+        spaces = client.get("/api/board/spaces")
+        assert spaces.status_code == 200
+        assert spaces.json()["spaces"][0]["thread_count"] == 1
+
+        threads = client.get(f"/api/board/threads?space_id={space_id}")
+        assert threads.status_code == 200
+        assert threads.json()["threads"][0]["post_count"] == 3
+
+        search = client.get("/api/board/search?q=SGET")
+        assert search.status_code == 200
+        assert search.json()["results"][0]["result_type"] == "post"
+
+    def test_board_missing_thread_is_404(self, client: TestClient) -> None:
+        response = client.get("/api/board/threads/9999")
+        assert response.status_code == 404
