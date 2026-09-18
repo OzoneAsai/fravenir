@@ -70,6 +70,15 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
 
     names = sorted(t.name for t in listed.tools)
     assert names == [
+        "board_create_actor",
+        "board_create_space",
+        "board_create_thread",
+        "board_edit_post",
+        "board_get_thread",
+        "board_list_spaces",
+        "board_list_threads",
+        "board_post",
+        "board_search",
         "memory_compact",
         "memory_delete",
         "memory_explore",
