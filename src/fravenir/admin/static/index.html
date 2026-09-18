@@ -8,6 +8,10 @@
 </head>
 <body class="view-panel" data-theme="dark">
   <header id="stats-bar">
+    <div id="surface-switch" role="tablist" aria-label="Surface">
+      <button type="button" class="surface-btn active" data-surface="graph" role="tab" aria-selected="true">Graph</button>
+      <button type="button" class="surface-btn" data-surface="board" role="tab" aria-selected="false">Board</button>
+    </div>
     <div id="stats-items"></div>
     <div id="search-box">
       <input type="search" id="search-input" placeholder="ノード名で検索..." autocomplete="off">
@@ -110,6 +114,34 @@
       </div>
     </aside>
     <main id="cy"></main>
+    <main id="board-view" hidden>
+      <div class="board-shell">
+        <div class="board-toolbar">
+          <label class="board-author-label" for="board-author">Author</label>
+          <input id="board-author" type="text" maxlength="128" autocomplete="off" value="admin">
+          <input id="board-search-input" type="search" placeholder="Boardを検索..." autocomplete="off">
+          <button type="button" id="board-search-btn">Search</button>
+          <button type="button" id="board-refresh">Refresh</button>
+          <button type="button" id="board-create-space">+ Space</button>
+          <button type="button" id="board-create-thread">+ Thread</button>
+        </div>
+        <div class="board-columns">
+          <section class="board-column board-spaces-column">
+            <h3>Spaces</h3>
+            <div id="board-spaces" class="board-list"></div>
+          </section>
+          <section class="board-column board-threads-column">
+            <h3>Threads</h3>
+            <div id="board-threads" class="board-list"></div>
+          </section>
+          <section class="board-column board-thread-column">
+            <div id="board-thread" class="board-thread-detail">
+              <div class="empty-state">threadを選択してください</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
     <aside id="detail-panel"></aside>
   </div>
   <div id="popover" hidden></div>
