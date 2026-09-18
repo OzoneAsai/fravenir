@@ -10,6 +10,7 @@ from fravenir.core.board import (
     add_post,
     create_space,
     create_thread,
+    edit_post,
     get_thread,
     list_spaces,
     list_threads,
@@ -113,3 +114,43 @@ def test_duplicate_space_name_is_rejected(tmp_project: Path) -> None:
 
     with pytest.raises(ValueError, match="already exists"):
         create_space(character_id=character_id, name="JADX")
+
+
+def test_edit_post_preserves_revision_and_rejects_stale_writer(tmp_project: Path) -> None:
+    character_id = _init(tmp_project, "board_edit")
+    space = create_space(character_id=character_id, name="research")
+    thread = create_thread(
+        character_id=character_id,
+        space_id=int(space["space_id"]),
+        title="revision",
+        author_kind="human",
+        author_display_name="Ozone",
+        initial_post="old text",
+    )
+    before = get_thread(character_id=character_id, thread_id=int(thread["thread_id"]))
+    post_id = int(before["posts"][0]["id"])
+
+    edited = edit_post(
+        character_id=character_id,
+        post_id=post_id,
+        body="new text",
+        expected_revision=1,
+        editor_kind="agent",
+        editor_display_name="ChatGPT",
+    )
+    assert edited["revision"] == 2
+    assert edited["thread_version"] == 2
+
+    after = get_thread(character_id=character_id, thread_id=int(thread["thread_id"]))
+    assert after["posts"][0]["body"] == "new text"
+    assert after["posts"][0]["revision"] == 2
+
+    with pytest.raises(ValueError, match="stale post revision"):
+        edit_post(
+            character_id=character_id,
+            post_id=post_id,
+            body="stale overwrite",
+            expected_revision=1,
+            editor_kind="agent",
+            editor_display_name="Other agent",
+        )
