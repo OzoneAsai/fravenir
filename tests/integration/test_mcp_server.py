@@ -72,6 +72,7 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
     assert names == [
         "board_create_space",
         "board_create_thread",
+        "board_edit_post",
         "board_get_thread",
         "board_list_spaces",
         "board_list_threads",
