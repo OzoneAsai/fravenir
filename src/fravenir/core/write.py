@@ -8,12 +8,14 @@ Step 6: 矛盾検出 + supersede 自動設定 (P5-3 以降)。
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import structlog
 
+from fravenir.core.graph import NodeType, link_relation_in_conn
 from fravenir.core.supersede import detect_and_supersede
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
@@ -45,6 +47,7 @@ def memory_write(
     config: AppConfig,
     embedder: Embedder,
     extraction_client: ExtractionClient | None = None,
+    source_refs: Sequence[tuple[NodeType, int]] | None = None,
 ) -> dict[str, object]:
     """Write one episode, its embedding, and (if extraction_client given) entities/relations.
 
@@ -68,8 +71,35 @@ def memory_write(
 
     kv_conn = sqlite3.connect(kv_path)
     try:
-        episode_id = _insert_episode(kv_conn, content, kind, importance, session_id, now)
-        _insert_doc_status(kv_conn, episode_id, "pending")
+        kv_conn.execute("PRAGMA foreign_keys = ON")
+        kv_conn.execute("BEGIN IMMEDIATE")
+        episode_id = _insert_episode(
+            kv_conn,
+            content,
+            kind,
+            importance,
+            session_id,
+            now,
+            commit=False,
+        )
+        _insert_doc_status(kv_conn, episode_id, "pending", commit=False)
+        for source_type, source_id in source_refs or []:
+            if source_type not in ("post", "thread", "episode"):
+                raise ValueError(
+                    "derived memory sources must be post, thread, or episode nodes"
+                )
+            link_relation_in_conn(
+                kv_conn,
+                src_type="episode",
+                src_id=episode_id,
+                dst_type=source_type,
+                dst_id=source_id,
+                predicate="derived_from",
+            )
+        kv_conn.commit()
+    except Exception:
+        kv_conn.rollback()
+        raise
     finally:
         kv_conn.close()
 
@@ -375,6 +405,8 @@ def _insert_episode(
     importance: int,
     session_id: str | None,
     now: datetime,
+    *,
+    commit: bool = True,
 ) -> int:
     cur = conn.execute(
         """
@@ -383,18 +415,26 @@ def _insert_episode(
         """,
         (content, kind, importance, now.isoformat(), session_id),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     episode_id: int = cur.lastrowid  # type: ignore[assignment]
     return episode_id
 
 
-def _insert_doc_status(conn: sqlite3.Connection, episode_id: int, stage: str) -> None:
+def _insert_doc_status(
+    conn: sqlite3.Connection,
+    episode_id: int,
+    stage: str,
+    *,
+    commit: bool = True,
+) -> None:
     now = datetime.now(UTC)
     conn.execute(
         "INSERT INTO doc_status(episode_id, stage, updated_at) VALUES (?, ?, ?)",
         (episode_id, stage, now.isoformat()),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
 
 
 def _update_doc_status(

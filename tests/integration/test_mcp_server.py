@@ -70,14 +70,197 @@ async def test_mcp_list_tools(tmp_project: Path) -> None:
 
     names = sorted(t.name for t in listed.tools)
     assert names == [
+        "board_create_actor",
+        "board_create_space",
+        "board_create_thread",
+        "board_edit_post",
+        "board_get_thread",
+        "board_list_spaces",
+        "board_list_threads",
+        "board_post",
+        "board_search",
+        "graph_get_node",
+        "graph_invalidate_relation",
+        "graph_link",
+        "graph_neighbors",
+        "graph_search",
         "memory_compact",
         "memory_delete",
+        "memory_derive",
         "memory_explore",
         "memory_get",
         "memory_search",
         "memory_trace",
         "memory_write",
     ]
+
+
+@pytest.mark.anyio
+async def test_mcp_board_roundtrip(tmp_project: Path) -> None:
+    config = _init_character(tmp_project, "mcp_board")
+    server = build_server(config, embedder=_stub_embedder())
+
+    async with create_connected_server_and_client_session(server) as session:
+        actor = _parse(
+            await session.call_tool(
+                "board_create_actor",
+                {"display_name": "ChatGPT", "kind": "agent"},
+            )
+        )
+        assert isinstance(actor, dict)
+        space = _parse(
+            await session.call_tool(
+                "board_create_space",
+                {"slug": "general", "name": "General", "created_by": actor["id"]},
+            )
+        )
+        assert isinstance(space, dict)
+        thread = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {
+                    "space_id": space["id"],
+                    "title": "整理対象",
+                    "body": "原典は消さない",
+                    "created_by": actor["id"],
+                },
+            )
+        )
+        assert isinstance(thread, dict)
+        posted = _parse(
+            await session.call_tool(
+                "board_post",
+                {
+                    "thread_id": thread["id"],
+                    "body": "グラフ整理へつなぐ",
+                    "author_id": actor["id"],
+                    "expected_version": 1,
+                },
+            )
+        )
+        assert isinstance(posted, dict)
+        assert posted["thread_version"] == 2
+
+        got = _parse(
+            await session.call_tool("board_get_thread", {"thread_id": thread["id"]})
+        )
+        assert isinstance(got, dict)
+        assert got["version"] == 2
+        assert len(got["posts"]) == 2
+
+
+
+@pytest.mark.anyio
+async def test_mcp_graph_roundtrip(tmp_project: Path) -> None:
+    config = _init_character(tmp_project, "mcp_graph")
+    server = build_server(config, embedder=_stub_embedder())
+
+    async with create_connected_server_and_client_session(server) as session:
+        space = _parse(
+            await session.call_tool(
+                "board_create_space", {"slug": "graph", "name": "Graph"}
+            )
+        )
+        assert isinstance(space, dict)
+        left = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {"space_id": space["id"], "title": "Left"},
+            )
+        )
+        right = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {"space_id": space["id"], "title": "Right"},
+            )
+        )
+        assert isinstance(left, dict) and isinstance(right, dict)
+
+        linked = _parse(
+            await session.call_tool(
+                "graph_link",
+                {
+                    "src_type": "thread",
+                    "src_id": left["id"],
+                    "dst_type": "thread",
+                    "dst_id": right["id"],
+                    "predicate": "related_to",
+                },
+            )
+        )
+        assert isinstance(linked, dict)
+        assert linked["created"] is True
+
+        neighbors = _parse(
+            await session.call_tool(
+                "graph_neighbors",
+                {
+                    "node_type": "thread",
+                    "node_id": left["id"],
+                    "predicates": ["related_to"],
+                    "direction": "outgoing",
+                },
+            )
+        )
+        assert isinstance(neighbors, dict)
+        assert neighbors["count"] == 1
+        assert neighbors["neighbors"][0]["node"]["id"] == right["id"]
+
+
+
+@pytest.mark.anyio
+async def test_mcp_memory_derive_preserves_sources(tmp_project: Path) -> None:
+    config = _init_character(tmp_project, "mcp_derive")
+    server = build_server(config, embedder=_stub_embedder())
+
+    async with create_connected_server_and_client_session(server) as session:
+        space = _parse(
+            await session.call_tool(
+                "board_create_space", {"slug": "research", "name": "Research"}
+            )
+        )
+        assert isinstance(space, dict)
+        thread = _parse(
+            await session.call_tool(
+                "board_create_thread",
+                {
+                    "space_id": space["id"],
+                    "title": "B193",
+                    "body": "B193 の SGET preparation を観測",
+                },
+            )
+        )
+        assert isinstance(thread, dict)
+        source_post_id = thread["posts"][0]["id"]
+
+        derived = _parse(
+            await session.call_tool(
+                "memory_derive",
+                {
+                    "content": "B193 の SGET preparation は finally family 構築に関係する",
+                    "sources": [{"type": "post", "id": source_post_id}],
+                    "importance": 2,
+                },
+            )
+        )
+        assert isinstance(derived, dict)
+        episode_id = derived["episode_id"]
+
+        provenance = _parse(
+            await session.call_tool(
+                "graph_neighbors",
+                {
+                    "node_type": "episode",
+                    "node_id": episode_id,
+                    "predicates": ["derived_from"],
+                    "direction": "outgoing",
+                },
+            )
+        )
+        assert isinstance(provenance, dict)
+        assert provenance["count"] == 1
+        assert provenance["neighbors"][0]["node"]["type"] == "post"
+        assert provenance["neighbors"][0]["node"]["id"] == source_post_id
 
 
 @pytest.mark.anyio

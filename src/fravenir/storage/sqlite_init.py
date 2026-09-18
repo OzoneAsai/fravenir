@@ -5,6 +5,8 @@ from pathlib import Path
 
 import sqlite_vec
 
+from fravenir.migrations.board import BOARD_DDL
+
 _KV_DDL = """\
 CREATE TABLE IF NOT EXISTS episodes (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,6 +160,7 @@ def init_kv(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     try:
         conn.executescript(_KV_DDL)
+        conn.executescript(BOARD_DDL)
         conn.commit()
     finally:
         conn.close()
