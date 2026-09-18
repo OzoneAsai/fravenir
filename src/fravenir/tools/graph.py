@@ -63,6 +63,24 @@ def register_graph_tools(mcp: MCPServer, *, character_id: str) -> None:
         )
 
     @mcp.tool(
+        annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False)
+    )
+    def graph_search(
+        query: str,
+        node_types: list[Literal["episode", "entity", "thread", "post"]] | None = None,
+        limit: int = 30,
+    ) -> list[dict[str, object]]:
+        """episode/entity/thread/postを横断して文字列検索する。"""
+        return _as_tool_error(
+            lambda: _graph.search_nodes(
+                character_id=character_id,
+                query=query,
+                node_types=node_types,
+                limit=limit,
+            )
+        )
+
+    @mcp.tool(
         annotations=ToolAnnotations(
             read_only_hint=False,
             destructive_hint=False,
