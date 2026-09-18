@@ -60,6 +60,30 @@ def _actor_id(
     return int(cur.lastrowid)
 
 
+
+
+def ensure_actor(
+    *,
+    character_id: str,
+    kind: ActorKind,
+    display_name: str,
+    external_subject: str | None = None,
+) -> int:
+    """Resolve or create an actor and return its stable local id."""
+    conn = _connect(character_id)
+    try:
+        actor_id = _actor_id(
+            conn,
+            kind=kind,
+            display_name=display_name,
+            external_subject=external_subject,
+        )
+        conn.commit()
+        return actor_id
+    finally:
+        conn.close()
+
+
 def create_space(
     *,
     character_id: str,
