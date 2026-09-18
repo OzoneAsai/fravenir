@@ -7,7 +7,7 @@ module into a monolith.
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from fravenir.core.extraction import ExtractionClient
 from fravenir.embedding import Embedder
@@ -19,14 +19,8 @@ def build_server(
     config: AppConfig,
     embedder: Embedder | None = None,
     extraction_client: ExtractionClient | None = None,
-    host: str | None = None,
-    port: int | None = None,
-) -> FastMCP:
-    """Build an MCP server bound to a specific character.
-
-    Host/port are retained here for v1 compatibility. They will move to the
-    transport runner during the MCP SDK v2 migration.
-    """
+) -> MCPServer:
+    """Build an MCP server bound to a specific character."""
     character_id = config.character.id
     emb = embedder if embedder is not None else Embedder(config.embedding)
 
@@ -38,13 +32,7 @@ def build_server(
     else:
         ext = None
 
-    fastmcp_kwargs: dict[str, object] = {"name": f"fravenir_{character_id}"}
-    if host is not None:
-        fastmcp_kwargs["host"] = host
-    if port is not None:
-        fastmcp_kwargs["port"] = port
-    mcp: FastMCP = FastMCP(**fastmcp_kwargs)  # type: ignore[arg-type]
-
+    mcp = MCPServer(name=f"fravenir_{character_id}")
     register_memory_tools(
         mcp,
         character_id=character_id,
