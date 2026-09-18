@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from fravenir.core.extraction import ExtractionClient
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
+from fravenir.tools.board import register_board_tools
 from fravenir.tools.memory import register_memory_tools
 
 
@@ -46,4 +47,5 @@ def build_server(
         embedder=emb,
         extraction_client=ext,
     )
+    register_board_tools(mcp, character_id=character_id)
     return mcp
