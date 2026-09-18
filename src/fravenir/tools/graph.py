@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, TypeVar
+from typing import Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -11,10 +11,8 @@ from mcp.types import ToolAnnotations
 
 from fravenir.core import graph_api as _graph
 
-_T = TypeVar("_T")
 
-
-def _as_tool_error(fn: Callable[[], _T]) -> _T:
+def _as_tool_error[T](fn: Callable[[], T]) -> T:
     try:
         return fn()
     except ValueError as e:
