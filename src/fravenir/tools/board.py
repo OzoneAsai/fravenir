@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Callable
+from typing import Literal, TypeVar
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -10,8 +11,10 @@ from mcp.types import ToolAnnotations
 
 from fravenir.core import board as _board
 
+_T = TypeVar("_T")
 
-def _as_tool_error(fn):
+
+def _as_tool_error(fn: Callable[[], _T]) -> _T:
     try:
         return fn()
     except ValueError as e:
@@ -92,7 +95,12 @@ def register_board_tools(mcp: MCPServer, *, character_id: str) -> None:
     )
     def board_get_thread(thread_id: int) -> dict[str, object]:
         """thread本文と投稿を原典のまま取得する。"""
-        return _as_tool_error(lambda: _board.get_thread(character_id=character_id, thread_id=thread_id))
+        return _as_tool_error(
+            lambda: _board.get_thread(
+                character_id=character_id,
+                thread_id=thread_id,
+            )
+        )
 
     @mcp.tool(
         annotations=ToolAnnotations(
