@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, TypeVar
+from typing import Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -14,10 +14,8 @@ from fravenir.core.provenance import derive_memory_from_posts, get_episode_sourc
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
 
-_T = TypeVar("_T")
 
-
-def _as_tool_error(fn: Callable[[], _T]) -> _T:
+def _as_tool_error[T](fn: Callable[[], T]) -> T:
     try:
         return fn()
     except ValueError as e:
