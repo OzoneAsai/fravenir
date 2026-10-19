@@ -94,14 +94,20 @@ resolution time.
 
 ## Scoring
 
-Search ranking combines ACT-R style activation with vector similarity and importance.
+Search ranking prioritizes vector and lexical relevance, with bounded context assistance.
 
 ```text
-score = activation + alpha_similarity * vector_similarity + alpha_importance * importance
+relevance = 0.65 * vector_similarity + 0.35 * normalized_BM25
+score = relevance + bounded_context  # default: 0 <= bounded_context <= 0.02
 ```
 
 Activation is influenced by access history, elapsed time, association strength, and
 self-related cues.
+
+ACT-R, importance, graph evidence, and self cues share the context budget. Search
+does not record result impressions as accesses. Historical search rows are retained
+but excluded from search activation. See the [retrieval operations guide](../operations/search-relevance.md)
+for score components, graph direction policies, evaluation, and rollback.
 
 ## Main Flows
 
@@ -120,9 +126,9 @@ If LLM extraction fails, the episode and embedding are still kept.
 
 1. Embed the query.
 2. Search episode vectors.
-3. Expand candidates through related entities and relations.
-4. Rerank with activation scoring.
-5. Update access history.
+3. Merge BM25 candidates and expand typed episode relations up to two hops.
+4. Rescore each candidate's own query relevance, using bounded contextual assistance.
+5. Return score components, paths, and source revisions without writing to the DB.
 
 ### memory_get
 

@@ -1,0 +1,15 @@
+{
+  "description": "Manual, graded judgments from snapshot episode contents, fixed before after-ranking. 3 answers intent, 2 direct topic, 1 useful context. Unlisted=0. Private content is not distributed.",
+  "cases": [
+    {"query": "Edge0", "relevance": {"99": 3, "105": 3, "108": 3, "113": 2, "100": 1, "104": 1, "107": 1}},
+    {"query": "CHUNITHM", "relevance": {"101": 3, "116": 3, "118": 3, "145": 2, "117": 1}},
+    {"query": "MoE expert SSD offload", "relevance": {"105": 3, "108": 3, "99": 3, "100": 2, "113": 2, "107": 1, "110": 1}},
+    {"query": "29分枠 理由", "relevance": {"130": 3, "103": 3, "131": 2, "132": 2}},
+    {"query": "ChatGPT Classic Ghidra", "relevance": {"159": 3, "162": 3, "174": 3, "160": 2, "158": 1, "161": 1}},
+    {"query": "Nicoboxをデスクトップ化したきっかけ", "relevance": {"152": 3, "156": 3, "166": 3, "174": 3, "153": 2, "154": 1, "155": 1, "157": 1}},
+    {"query": "WorldWindow 静かな世界", "relevance": {"164": 3, "172": 3, "139": 2, "165": 1, "167": 1}},
+    {"query": "シェーダーを学びたい", "relevance": {"150": 3, "147": 2, "149": 2, "174": 2, "148": 1, "151": 1}},
+    {"query": "PrintCpp", "relevance": {"171": 3, "157": 3, "162": 2, "174": 2, "71": 2, "163": 1, "138": 1, "151": 1}},
+    {"query": "PrintSwift", "relevance": {"173": 3, "158": 3, "35": 3, "36": 3, "162": 2, "174": 2, "38": 2, "41": 2, "44": 2, "45": 2, "47": 2, "55": 2, "56": 2, "65": 2, "70": 2, "138": 1}}
+  ]
+}

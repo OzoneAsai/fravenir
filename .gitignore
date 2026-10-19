@@ -15,10 +15,30 @@ dist/
 *.egg-info/
 
 # Databases
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 *.db
 *.db-*
 *.db-wal
 *.db-shm
+
+# Deployment secrets and generated runtime artifacts
+venv/
+logs/
+backups/
+.env
+.env.*
+!.env.example
+oauth.env
+enrollment-*
+*.status
+*.status.json
+*.exe
+*.bak-*
+*.pem
+*.key
 
 # Editor / OS
 .DS_Store

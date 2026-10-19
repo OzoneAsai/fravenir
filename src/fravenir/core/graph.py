@@ -15,8 +15,115 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from dataclasses import dataclass
 
 import networkx as nx
+
+
+@dataclass(frozen=True)
+class RelationPolicy:
+    """Traversal confidence by direction, without rewriting the stored relation."""
+
+    outgoing: float
+    incoming: float
+
+
+# Hierarchy is not symmetric: going up collects context; going down selects one
+# detail among many. Derivation follows evidence toward its source, never every
+# derivative of a source. Unknown predicates are intentionally not traversed.
+_SEARCH_RELATIONS = {
+    "part_of": RelationPolicy(0.8, 0.4),
+    "related_to": RelationPolicy(0.6, 0.6),
+    "derived_from": RelationPolicy(0.8, 0.0),
+}
+
+
+@dataclass(frozen=True)
+class EpisodePath:
+    seed_id: int
+    confidence: float
+    edges: tuple[dict[str, object], ...]
+
+
+def expand_episode_candidates(
+    conn: sqlite3.Connection,
+    seeds: dict[int, float],
+    eligible_ids: set[int],
+    *,
+    max_hops: int = 2,
+    fan_limit: int = 12,
+    max_candidates: int = 64,
+) -> dict[int, EpisodePath]:
+    """Bounded, typed episode traversal, preserving edge direction and evidence.
+
+    Keep the strongest path per node rather than accumulating arbitrary hub/cycle
+    counts. Neither an archived/suppressed node nor an excluded kind can relay a
+    path. Candidate confidence still requires query relevance at ranking time.
+    """
+    if max_candidates <= 0 or not seeds:
+        return {}
+    frontier = {
+        ep: EpisodePath(ep, score, ())
+        for ep, score in seeds.items()
+        if ep in eligible_ids and score > 0
+    }
+    best = dict(frontier)
+    reached: dict[int, EpisodePath] = {}
+    for _ in range(min(max_hops, 2)):
+        following: dict[int, EpisodePath] = {}
+        for node, path in sorted(frontier.items(), key=lambda p: (-p[1].confidence, p[0])):
+            rows = conn.execute(
+                """SELECT id, src_id, dst_id, predicate, strength, description,
+                          valid_from, supersedes
+                   FROM relations
+                   WHERE valid_to IS NULL AND src_type='episode' AND dst_type='episode'
+                     AND (src_id=? OR dst_id=?)
+                   ORDER BY strength DESC, id ASC""",
+                (node, node),
+            )
+            neighbors: list[tuple[float, int, dict[str, object]]] = []
+            for rid, src, dst, predicate, strength, description, valid_from, supersedes in rows:
+                policy = _SEARCH_RELATIONS.get(predicate)
+                if policy is None or src not in eligible_ids or dst not in eligible_ids:
+                    continue
+                outgoing = src == node
+                weight = policy.outgoing if outgoing else policy.incoming
+                confidence = path.confidence * weight * max(0.0, min(float(strength), 1.0))
+                if confidence <= 0:
+                    continue
+                edge: dict[str, object] = {
+                    "relation_id": rid,
+                    "src_type": "episode",
+                    "src_id": src,
+                    "dst_type": "episode",
+                    "dst_id": dst,
+                    "predicate": predicate,
+                    "strength": strength,
+                    "description": description,
+                    "valid_from": valid_from,
+                    "supersedes": supersedes,
+                    "direction": "outgoing" if outgoing else "incoming",
+                }
+                neighbors.append((confidence, dst if outgoing else src, edge))
+            neighbors.sort(key=lambda item: (-item[0], item[1], int(str(item[2]["relation_id"]))))
+            for confidence, neighbor, edge in neighbors[:fan_limit]:
+                if neighbor == path.seed_id:
+                    continue
+                if neighbor not in reached and len(reached) >= max_candidates:
+                    continue
+                candidate = EpisodePath(path.seed_id, confidence, (*path.edges, edge))
+                evidence = reached.get(neighbor)
+                if evidence is None or confidence > evidence.confidence:
+                    reached[neighbor] = candidate
+                previous = best.get(neighbor)
+                if previous and previous.confidence >= confidence:
+                    continue
+                best[neighbor] = candidate
+                following[neighbor] = candidate
+        frontier = following
+        if not frontier:
+            break
+    return reached
 
 
 def build_subgraph_from_seeds(

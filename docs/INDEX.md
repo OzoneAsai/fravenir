@@ -18,7 +18,9 @@
 - [サンプル設定](../examples/README.md): `config.yaml` と `seed.yaml` の説明。
 - [systemd運用](operations/systemd_timer.md): MCP本体の常駐と `fravenir compact` の定期実行。
 - [admin server](operations/admin_server.md): 任意の管理UIをローカル/閉域で使うための運用メモ。
+- [Activity](operations/activity-timeline-20261016.md): 投稿・記憶・関係のタイムラインと読み取り専用API。
 - [migrations](operations/migrations.md): 古いDBを現在のスキーマへ追いつかせる保守用リファレンス。
+- [検索関連性](operations/search-relevance.md): 意味・語彙・グラフ検索、評価、本番適用とロールバック。
 - [prompt injection notes](operations/prompt_injection.md): 記憶本文をLLMに渡す前の安全な囲い方。
 
 ## 3. 設計と技術仕様

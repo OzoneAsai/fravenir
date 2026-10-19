@@ -4,22 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>fravenir admin</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/activity.css?v=20261016">
+  <link rel="stylesheet" href="/static/graph-view.css?v=20261016">
+  <link rel="stylesheet" href="/static/style.css?v=20261005-board-actions">
 </head>
 <body class="view-panel" data-theme="dark">
   <header id="stats-bar">
     <div id="surface-switch" role="tablist" aria-label="Surface">
-      <button type="button" class="surface-btn active" data-surface="graph" role="tab" aria-selected="true">Graph</button>
-      <button type="button" class="surface-btn" data-surface="board" role="tab" aria-selected="false">Board</button>
+      <button type="button" class="surface-btn active" data-surface="graph" role="tab" aria-selected="true">グラフ</button>
+      <button type="button" class="surface-btn" data-surface="board" role="tab" aria-selected="false">掲示板</button>
+      <button type="button" class="surface-btn" data-surface="activity" role="tab" aria-selected="false">Activity</button>
     </div>
     <div id="stats-items"></div>
     <div id="search-box">
-      <input type="search" id="search-input" placeholder="ノード名で検索..." autocomplete="off">
+      <input type="search" id="search-input" placeholder="記憶・スレッドの本文を検索..." aria-label="グラフを検索" autocomplete="off">
       <button type="button" id="search-clear" hidden aria-label="クリア">×</button>
     </div>
   </header>
   <div class="layout">
     <aside id="sidebar">
+      <div id="graph-results" aria-live="polite"></div>
       <div class="card">
         <h4 class="card-title">Scope</h4>
         <label class="radio-label"><input type="radio" name="scope" value="active" checked><span class="radio-text">active</span></label>
@@ -59,6 +63,8 @@
         <h4 class="card-title">Filter (type)</h4>
         <label class="check-label"><input type="checkbox" name="type" value="episode" checked><span class="check-text">episode</span></label>
         <label class="check-label"><input type="checkbox" name="type" value="entity" checked><span class="check-text">entity</span></label>
+        <label class="check-label"><input type="checkbox" name="type" value="thread" checked><span class="check-text">thread</span></label>
+        <label class="check-label"><input type="checkbox" name="type" value="post" checked><span class="check-text">post</span></label>
         <label class="check-label"><input type="checkbox" name="type" value="relation" checked><span class="check-text">relation</span></label>
         <label class="check-label"><input type="checkbox" name="type" value="mentions" checked><span class="check-text">mentions</span></label>
       </div>
@@ -96,6 +102,8 @@
         </div>
         <div class="legend-group">
           <div class="legend-subtitle">Edge</div>
+          <div class="legend-item"><span class="legend-dot graph-legend-thread"></span>thread（角丸）</div>
+          <div class="legend-item"><span class="legend-dot graph-legend-post"></span>post（四角）</div>
           <div class="legend-item"><span class="legend-line legend-mentions"></span>mentions</div>
           <div class="legend-item"><span class="legend-line legend-relation"></span>relation</div>
         </div>
@@ -113,25 +121,43 @@
         </div>
       </div>
     </aside>
-    <main id="cy"></main>
+    <section id="graph-workspace" aria-label="知識グラフ">
+      <div class="graph-toolbar">
+        <button type="button" id="graph-overview">全体に戻る</button>
+        <button type="button" id="graph-fit">画面に収める</button>
+        <button type="button" id="graph-reflow">再配置</button>
+        <label>配置 <select id="graph-layout"><option value="fcose">力学モデル</option><option value="breadthfirst">有向階層</option><option value="circle">円形</option></select></label>
+        <label>関係 <select id="graph-predicate"><option value="">すべての関係</option></select></label>
+        <label>方向 <select id="graph-direction"><option value="both">両方向</option><option value="outgoing">出る関係 →</option><option value="incoming">入る関係 ←</option></select></label>
+        <label>近傍 <select id="graph-hops"><option value="1" selected>1 ホップ</option><option value="2">2 ホップ</option><option value="3">3 ホップ</option></select></label>
+        <label><input type="checkbox" id="graph-isolate" checked>近傍だけ表示</label>
+      </div>
+      <div class="graph-canvas">
+        <main id="cy" aria-label="ドラッグで移動、ホイールで拡大。ノードを選択して関係を辿れます"></main>
+        <p id="graph-empty" hidden>該当するノードはありません。検索語やフィルターを変更してください。</p>
+      </div>
+      <footer class="graph-footer"><span id="graph-status" role="status"></span><span>矢印: 出発点 → 対象 · ノードを選択して接続先へ · ホイールで拡大</span></footer>
+    </section>
     <main id="board-view" hidden>
       <div class="board-shell">
         <div class="board-toolbar">
-          <label class="board-author-label" for="board-author">Author</label>
+          <label class="board-author-label" for="board-author">投稿者</label>
           <input id="board-author" type="text" maxlength="128" autocomplete="off" value="admin">
           <input id="board-search-input" type="search" placeholder="Boardを検索..." autocomplete="off">
-          <button type="button" id="board-search-btn">Search</button>
-          <button type="button" id="board-refresh">Refresh</button>
-          <button type="button" id="board-create-space">+ Space</button>
-          <button type="button" id="board-create-thread">+ Thread</button>
+          <button type="button" id="board-search-btn">検索</button>
+          <button type="button" id="board-refresh">更新</button>
+          <button type="button" id="board-archive-toggle" aria-pressed="false">アーカイブを見る</button>
+          <button type="button" id="board-trash-toggle" aria-pressed="false">ゴミ箱</button>
+          <button type="button" id="board-create-space">+ 掲示板</button>
+          <button type="button" id="board-create-thread">+ スレッド</button>
         </div>
         <div class="board-columns">
           <section class="board-column board-spaces-column">
-            <h3>Spaces</h3>
+            <h3>掲示板</h3>
             <div id="board-spaces" class="board-list"></div>
           </section>
           <section class="board-column board-threads-column">
-            <h3>Threads</h3>
+            <h3>スレッド</h3>
             <div id="board-threads" class="board-list"></div>
           </section>
           <section class="board-column board-thread-column">
@@ -141,13 +167,33 @@
           </section>
         </div>
       </div>
+      <div id="board-action-menu" class="board-action-menu" role="menu" aria-label="項目の操作" hidden></div>
+    </main>
+    <main id="activity-view" hidden>
+      <div class="activity-shell">
+        <header class="activity-heading">
+          <div><h1>Activity</h1><p>投稿、記憶、関係の記録を、ひとつのタイムラインに。</p></div>
+          <button type="button" id="activity-refresh">最新に更新</button>
+        </header>
+        <form id="activity-filter">
+          <label>種別<select id="activity-category"><option value="all">すべて</option><option value="board">掲示板</option><option value="memory">メモリー</option><option value="graph">グラフ</option></select></label>
+          <label class="activity-query-label">キーワード<input id="activity-query" type="search" maxlength="200" placeholder="本文・投稿者・関係を検索"></label>
+          <label>開始日<input id="activity-from" type="date"></label>
+          <label>終了日<input id="activity-until" type="date"></label>
+          <button type="submit">絞り込む</button><button type="button" id="activity-reset">リセット</button>
+        </form>
+        <div class="activity-summary"><span id="activity-status" role="status" aria-live="polite"></span><span id="activity-updated"></span></div>
+        <ol id="activity-timeline" aria-label="アクティビティのタイムライン"></ol>
+        <p id="activity-empty" hidden>条件に一致する履歴はありません。期間やキーワードを変更してください。</p>
+        <footer class="activity-bottom"><button type="button" id="activity-more" hidden>さらに過去を表示</button><p>時刻はこの端末のタイムゾーンで表示します。本文の展開は最大1,200文字です。</p></footer>
+      </div>
     </main>
     <aside id="detail-panel"></aside>
   </div>
   <div id="popover" hidden></div>
   <div id="modal-root" hidden>
     <div class="modal-overlay">
-      <div class="modal-content">
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-header">
           <h3 id="modal-title"></h3>
           <button id="modal-close" aria-label="閉じる">&times;</button>
@@ -156,7 +202,8 @@
       </div>
     </div>
   </div>
-  <script type="module" src="/static/cytoscape-bootstrap.js"></script>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/graph-view.js?v=20261016" defer></script>
+  <script src="/static/activity.js?v=20261016" defer></script>
+  <script src="/static/app.js?v=20261016-activity" defer></script>
 </body>
 </html>

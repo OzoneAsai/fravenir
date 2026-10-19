@@ -41,6 +41,17 @@ class SessionConfig(BaseModel):
     auto_timeout_minutes: int = Field(default=15, ge=1)
 
 
+class SearchConfig(BaseModel):
+    """Query relevance owns ranking; context has a separate, bounded budget."""
+
+    lexical_weight: float = Field(default=0.35, ge=0.0, le=1.0)
+    context_budget: float = Field(default=0.02, ge=0.0, le=0.05)
+    graph_seed_limit: int = Field(default=8, ge=1, le=32)
+    graph_max_hops: int = Field(default=2, ge=1, le=2)
+    graph_fan_limit: int = Field(default=12, ge=1, le=100)
+    graph_max_candidates: int = Field(default=64, ge=0, le=256)
+
+
 class LoggingConfig(BaseModel):
     level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR)$")
     format: str = Field(default="json", pattern="^(json|console)$")
@@ -85,6 +96,7 @@ class AppConfig(BaseModel):
     character: CharacterConfig
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     act_r: ActRConfig = Field(default_factory=ActRConfig)
+    search: SearchConfig = Field(default_factory=SearchConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     compact: CompactConfig = Field(default_factory=CompactConfig)

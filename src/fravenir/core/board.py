@@ -16,6 +16,13 @@ from fravenir.storage.sqlite_init import init_kv
 
 ActorKind = Literal["human", "agent", "system"]
 PostKind = Literal["message", "summary", "decision", "note"]
+ThreadStatus = Literal["open", "closed"]
+TrashKind = Literal["space", "thread", "post"]
+_TRASH_TABLES: dict[TrashKind, str] = {
+    "space": "spaces",
+    "thread": "threads",
+    "post": "posts",
+}
 
 
 def _connect(character_id: str) -> sqlite3.Connection:
@@ -190,6 +197,33 @@ def create_space(
         conn.close()
 
 
+def rename_space(
+    *, character_id: str, space_id: int, name: str, expected_name: str
+) -> dict[str, object]:
+    clean_name = name.strip()
+    if not clean_name or len(clean_name) > 128:
+        raise ValueError("space name must be between 1 and 128 characters")
+    conn = _connect(character_id)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT name FROM spaces WHERE id = ? AND deleted_at IS NULL", (space_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"space not found: {space_id}")
+        if row["name"] != expected_name:
+            raise ValueError("stale space name: reload the board before editing")
+        changed = row["name"] != clean_name
+        if changed:
+            conn.execute("UPDATE spaces SET name = ? WHERE id = ?", (clean_name, space_id))
+        conn.commit()
+        return {"space_id": space_id, "name": clean_name, "changed": changed}
+    except sqlite3.IntegrityError as exc:
+        raise ValueError(f"space already exists: {clean_name}") from exc
+    finally:
+        conn.close()
+
+
 def list_spaces(*, character_id: str) -> list[dict[str, object]]:
     conn = _connect(character_id)
     try:
@@ -198,7 +232,8 @@ def list_spaces(*, character_id: str) -> list[dict[str, object]]:
             SELECT s.id, s.name, s.description, s.created_at,
                    COUNT(t.id) AS thread_count
             FROM spaces s
-            LEFT JOIN threads t ON t.space_id = s.id
+            LEFT JOIN threads t ON t.space_id = s.id AND t.deleted_at IS NULL
+            WHERE s.deleted_at IS NULL
             GROUP BY s.id
             ORDER BY s.name COLLATE NOCASE
             """
@@ -224,7 +259,9 @@ def create_thread(
 
     conn = _connect(character_id)
     try:
-        space = conn.execute("SELECT id FROM spaces WHERE id = ?", (space_id,)).fetchone()
+        space = conn.execute(
+            "SELECT id FROM spaces WHERE id = ? AND deleted_at IS NULL", (space_id,)
+        ).fetchone()
         if space is None:
             raise ValueError(f"space not found: {space_id}")
         actor_id = _actor_id(
@@ -284,16 +321,28 @@ def add_post(
 
     conn = _connect(character_id)
     try:
+        conn.execute("BEGIN IMMEDIATE")
         thread = conn.execute(
-            "SELECT id, version FROM threads WHERE id = ?",
+            """
+            SELECT t.id, t.version, t.status, t.deleted_at,
+                   s.deleted_at AS space_deleted_at
+            FROM threads t JOIN spaces s ON s.id = t.space_id
+            WHERE t.id = ?
+            """,
             (thread_id,),
         ).fetchone()
-        if thread is None:
+        if (
+            thread is None
+            or thread["deleted_at"] is not None
+            or thread["space_deleted_at"] is not None
+        ):
             raise ValueError(f"thread not found: {thread_id}")
+        if thread["status"] != "open":
+            raise ValueError(f"closed thread: {thread_id}")
 
         if parent_post_id is not None:
             parent = conn.execute(
-                "SELECT thread_id FROM posts WHERE id = ?",
+                "SELECT thread_id FROM posts WHERE id = ? AND deleted_at IS NULL",
                 (parent_post_id,),
             ).fetchone()
             if parent is None:
@@ -353,9 +402,12 @@ def edit_post(
     try:
         post = conn.execute(
             """
-            SELECT id, thread_id, body, revision
-            FROM posts
-            WHERE id = ?
+            SELECT p.id, p.thread_id, p.body, p.revision
+            FROM posts p
+            JOIN threads t ON t.id = p.thread_id
+            JOIN spaces s ON s.id = t.space_id
+            WHERE p.id = ? AND p.deleted_at IS NULL
+              AND t.deleted_at IS NULL AND s.deleted_at IS NULL
             """,
             (post_id,),
         ).fetchone()
@@ -451,11 +503,22 @@ def organize_thread(
     conn = _connect(character_id)
     try:
         thread = conn.execute(
-            "SELECT id, version FROM threads WHERE id = ?",
+            """
+            SELECT t.id, t.version, t.status, t.deleted_at,
+                   s.deleted_at AS space_deleted_at
+            FROM threads t JOIN spaces s ON s.id = t.space_id
+            WHERE t.id = ?
+            """,
             (thread_id,),
         ).fetchone()
-        if thread is None:
+        if (
+            thread is None
+            or thread["deleted_at"] is not None
+            or thread["space_deleted_at"] is not None
+        ):
             raise ValueError(f"thread not found: {thread_id}")
+        if thread["status"] != "open":
+            raise ValueError(f"closed thread: {thread_id}")
         current_version = int(thread["version"])
         if current_version != expected_thread_version:
             raise ValueError(
@@ -466,7 +529,7 @@ def organize_thread(
         sources: list[tuple[int, int]] = []
         for post_id in source_post_ids:
             row = conn.execute(
-                "SELECT id, thread_id, revision FROM posts WHERE id = ?",
+                "SELECT id, thread_id, revision FROM posts WHERE id = ? AND deleted_at IS NULL",
                 (post_id,),
             ).fetchone()
             if row is None:
@@ -578,8 +641,9 @@ def get_thread(*, character_id: str, thread_id: int) -> dict[str, object]:
                    a.id AS created_by_id, a.kind AS created_by_kind,
                    a.display_name AS created_by_name
             FROM threads t
+            JOIN spaces s ON s.id = t.space_id
             LEFT JOIN actors a ON a.id = t.created_by
-            WHERE t.id = ?
+            WHERE t.id = ? AND t.deleted_at IS NULL AND s.deleted_at IS NULL
             """,
             (thread_id,),
         ).fetchone()
@@ -594,7 +658,7 @@ def get_thread(*, character_id: str, thread_id: int) -> dict[str, object]:
                    a.display_name AS author_name
             FROM posts p
             LEFT JOIN actors a ON a.id = p.author_id
-            WHERE p.thread_id = ?
+            WHERE p.thread_id = ? AND p.deleted_at IS NULL
             ORDER BY p.id
             """,
             (thread_id,),
@@ -617,7 +681,10 @@ def list_threads(
     if not 1 <= limit <= 200:
         raise ValueError("limit must be between 1 and 200")
 
-    where: list[str] = []
+    if status not in (None, "open", "closed"):
+        raise ValueError(f"unsupported thread status: {status}")
+
+    where: list[str] = ["t.deleted_at IS NULL", "s.deleted_at IS NULL"]
     params: list[object] = []
     if space_id is not None:
         where.append("t.space_id = ?")
@@ -635,7 +702,8 @@ def list_threads(
                    t.created_at, t.updated_at,
                    COUNT(p.id) AS post_count
             FROM threads t
-            LEFT JOIN posts p ON p.thread_id = t.id
+            JOIN spaces s ON s.id = t.space_id
+            LEFT JOIN posts p ON p.thread_id = t.id AND p.deleted_at IS NULL
             {clause}
             GROUP BY t.id
             ORDER BY t.updated_at DESC, t.id DESC
@@ -644,6 +712,175 @@ def list_threads(
             (*params, limit),
         ).fetchall()
         return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def update_thread(
+    *,
+    character_id: str,
+    thread_id: int,
+    expected_version: int,
+    title: str | None = None,
+    status: ThreadStatus | None = None,
+) -> dict[str, object]:
+    if title is None and status is None:
+        raise ValueError("a thread title or status is required")
+    clean_title = title.strip() if title is not None else None
+    if clean_title is not None and (not clean_title or len(clean_title) > 300):
+        raise ValueError("thread title must be between 1 and 300 characters")
+    if status is not None and status not in ("open", "closed"):
+        raise ValueError(f"unsupported thread status: {status}")
+    if expected_version < 1:
+        raise ValueError("expected_version must be >= 1")
+    conn = _connect(character_id)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        thread = conn.execute(
+            """SELECT t.id, t.title, t.status, t.version, t.deleted_at,
+                      s.deleted_at AS space_deleted_at
+               FROM threads t JOIN spaces s ON s.id = t.space_id WHERE t.id = ?""",
+            (thread_id,),
+        ).fetchone()
+        if (
+            thread is None
+            or thread["deleted_at"] is not None
+            or thread["space_deleted_at"] is not None
+        ):
+            raise ValueError(f"thread not found: {thread_id}")
+        current_version = int(thread["version"])
+        if current_version != expected_version:
+            raise ValueError(
+                f"stale thread version: expected {expected_version}, current {current_version}"
+            )
+        next_title = thread["title"] if clean_title is None else clean_title
+        next_status = thread["status"] if status is None else status
+        if thread["title"] == next_title and thread["status"] == next_status:
+            conn.commit()
+            return {
+                "thread_id": thread_id,
+                "title": next_title,
+                "status": next_status,
+                "version": current_version,
+                "changed": False,
+            }
+        now = datetime.now(UTC).isoformat()
+        conn.execute(
+            """UPDATE threads SET title = ?, status = ?, version = version + 1,
+                      updated_at = ? WHERE id = ?""",
+            (next_title, next_status, now, thread_id),
+        )
+        conn.commit()
+        return {
+            "thread_id": thread_id,
+            "title": next_title,
+            "status": next_status,
+            "version": current_version + 1,
+            "changed": True,
+        }
+    finally:
+        conn.close()
+
+
+def set_thread_status(
+    *, character_id: str, thread_id: int, status: ThreadStatus, expected_version: int
+) -> dict[str, object]:
+    result = update_thread(
+        character_id=character_id,
+        thread_id=thread_id,
+        expected_version=expected_version,
+        status=status,
+    )
+    return {key: result[key] for key in ("thread_id", "status", "version", "changed")}
+
+
+def list_trash(*, character_id: str) -> list[dict[str, object]]:
+    conn = _connect(character_id)
+    try:
+        rows = conn.execute(
+            """SELECT 'space' AS kind, s.id AS item_id, s.name AS title,
+                      s.description AS detail, s.deleted_at, NULL AS space_name,
+                      NULL AS thread_id
+               FROM spaces s WHERE s.deleted_at IS NOT NULL
+               UNION ALL
+               SELECT 'thread', t.id, t.title, NULL, t.deleted_at, s.name, NULL
+               FROM threads t JOIN spaces s ON s.id = t.space_id
+               WHERE t.deleted_at IS NOT NULL
+               UNION ALL
+               SELECT 'post', p.id, substr(p.body, 1, 240), p.kind, p.deleted_at,
+                      s.name, t.id
+               FROM posts p JOIN threads t ON t.id = p.thread_id
+               JOIN spaces s ON s.id = t.space_id
+               WHERE p.deleted_at IS NOT NULL
+               ORDER BY deleted_at DESC, kind, item_id"""
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def trash_item(*, character_id: str, kind: TrashKind, item_id: int) -> dict[str, object]:
+    table = _TRASH_TABLES.get(kind)
+    if table is None:
+        raise ValueError(f"unsupported trash kind: {kind}")
+    conn = _connect(character_id)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            f"SELECT id, deleted_at FROM {table} WHERE id = ?", (item_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"{kind} not found: {item_id}")
+        if row["deleted_at"] is not None:
+            conn.commit()
+            return {"kind": kind, "item_id": item_id, "changed": False}
+        now = datetime.now(UTC).isoformat()
+        conn.execute(f"UPDATE {table} SET deleted_at = ? WHERE id = ?", (now, item_id))
+        conn.commit()
+        return {"kind": kind, "item_id": item_id, "deleted_at": now, "changed": True}
+    finally:
+        conn.close()
+
+
+def restore_item(*, character_id: str, kind: TrashKind, item_id: int) -> dict[str, object]:
+    table = _TRASH_TABLES.get(kind)
+    if table is None:
+        raise ValueError(f"unsupported trash kind: {kind}")
+    conn = _connect(character_id)
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            f"SELECT id, deleted_at FROM {table} WHERE id = ?", (item_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"{kind} not found: {item_id}")
+        if row["deleted_at"] is None:
+            conn.commit()
+            return {"kind": kind, "item_id": item_id, "changed": False}
+        if kind == "thread":
+            parent = conn.execute(
+                """SELECT s.deleted_at FROM threads t
+                   JOIN spaces s ON s.id = t.space_id WHERE t.id = ?""",
+                (item_id,),
+            ).fetchone()
+            if parent is None or parent["deleted_at"] is not None:
+                raise ValueError("restore the containing space first")
+        elif kind == "post":
+            parent = conn.execute(
+                """SELECT t.deleted_at AS thread_deleted_at, s.deleted_at AS space_deleted_at
+                   FROM posts p JOIN threads t ON t.id = p.thread_id
+                   JOIN spaces s ON s.id = t.space_id WHERE p.id = ?""",
+                (item_id,),
+            ).fetchone()
+            if (
+                parent is None
+                or parent["thread_deleted_at"] is not None
+                or parent["space_deleted_at"] is not None
+            ):
+                raise ValueError("restore the containing space and thread first")
+        conn.execute(f"UPDATE {table} SET deleted_at = NULL WHERE id = ?", (item_id,))
+        conn.commit()
+        return {"kind": kind, "item_id": item_id, "changed": True}
     finally:
         conn.close()
 
@@ -667,14 +904,16 @@ def search_board(
             """
             SELECT 'thread' AS result_type, t.id AS id, t.id AS thread_id,
                    t.title AS title, NULL AS body, t.updated_at AS timestamp
-            FROM threads t
-            WHERE t.title LIKE ? ESCAPE '\\'
+            FROM threads t JOIN spaces s ON s.id = t.space_id
+            WHERE t.title LIKE ? ESCAPE '\\' AND t.deleted_at IS NULL AND s.deleted_at IS NULL
             UNION ALL
             SELECT 'post' AS result_type, p.id AS id, p.thread_id AS thread_id,
                    t.title AS title, p.body AS body, p.created_at AS timestamp
             FROM posts p
             JOIN threads t ON t.id = p.thread_id
-            WHERE p.body LIKE ? ESCAPE '\\'
+            JOIN spaces s ON s.id = t.space_id
+            WHERE p.body LIKE ? ESCAPE '\\' AND p.deleted_at IS NULL
+              AND t.deleted_at IS NULL AND s.deleted_at IS NULL
             ORDER BY timestamp DESC
             LIMIT ?
             """,

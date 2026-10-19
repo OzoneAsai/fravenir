@@ -48,6 +48,7 @@ module = "networkx"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = "-m 'not slow and not golden_llm'"
 markers = [
     "slow: marks tests as slow (model load required; skipped by default, run with -m slow)",

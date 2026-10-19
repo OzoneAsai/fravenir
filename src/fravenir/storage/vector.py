@@ -100,3 +100,30 @@ def l2_to_cosine(l2_distance: float) -> float:
     Clamped to [0, 1] to guard against floating-point rounding.
     """
     return float(np.clip(1.0 - (l2_distance**2) / 2.0, 0.0, 1.0))
+
+
+def episode_cosines(
+    conn: sqlite3.Connection,
+    query: NDArray[np.float32],
+    episode_ids: set[int],
+) -> dict[int, float]:
+    """Score lexical/graph candidates against their own stored vectors.
+
+    These nodes need not be in the initial KNN window. Missing vectors remain
+    missing (callers must not substitute a seed's similarity).
+    """
+    result: dict[int, float] = {}
+    ids = sorted(episode_ids)
+    query_norm = float(np.linalg.norm(query))
+    for offset in range(0, len(ids), 400):
+        batch = ids[offset : offset + 400]
+        marks = ",".join("?" for _ in batch)
+        rows = conn.execute(
+            f"SELECT episode_id, embedding FROM vdb_memories WHERE episode_id IN ({marks})",
+            batch,
+        ).fetchall()
+        for ep_id, blob in rows:
+            vec = np.frombuffer(blob, dtype=np.float32)
+            norm = float(np.linalg.norm(vec)) * query_norm
+            result[ep_id] = float(np.clip(np.dot(query, vec) / norm, 0.0, 1.0)) if norm else 0.0
+    return result

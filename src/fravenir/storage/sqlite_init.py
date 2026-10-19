@@ -146,7 +146,8 @@ CREATE TABLE IF NOT EXISTS spaces (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL UNIQUE,
     description TEXT,
-    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS threads (
@@ -154,6 +155,7 @@ CREATE TABLE IF NOT EXISTS threads (
     space_id    INTEGER NOT NULL REFERENCES spaces(id),
     title       TEXT NOT NULL,
     status      TEXT NOT NULL DEFAULT 'open',
+    deleted_at  TIMESTAMP,
     created_by  INTEGER REFERENCES actors(id),
     version     INTEGER NOT NULL DEFAULT 1,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -172,7 +174,8 @@ CREATE TABLE IF NOT EXISTS posts (
     body           TEXT NOT NULL,
     revision       INTEGER NOT NULL DEFAULT 1,
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    edited_at      TIMESTAMP
+    edited_at      TIMESTAMP,
+    deleted_at     TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_posts_thread ON posts(thread_id, id);
 CREATE INDEX IF NOT EXISTS idx_posts_parent ON posts(parent_post_id);
@@ -237,11 +240,33 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vdb_relations USING vec0(
 """
 
 
+def _ensure_kv_lifecycle_columns(conn: sqlite3.Connection) -> None:
+    columns = {
+        "spaces": {"deleted_at": "TIMESTAMP"},
+        "threads": {"deleted_at": "TIMESTAMP"},
+        "posts": {"deleted_at": "TIMESTAMP"},
+    }
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for table, additions in columns.items():
+            existing = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+            for column, declaration in additions.items():
+                if column not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_spaces_deleted_at ON spaces(deleted_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_threads_deleted_at ON threads(deleted_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at)")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
 def init_kv(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     try:
         conn.executescript(_KV_DDL)
-        conn.commit()
+        _ensure_kv_lifecycle_columns(conn)
     finally:
         conn.close()
 

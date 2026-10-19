@@ -92,7 +92,7 @@ def _raise_board_error(exc: ValueError) -> Never:
     detail = str(exc)
     if "not found" in detail:
         raise HTTPException(status_code=404, detail=detail) from exc
-    if detail.startswith("stale "):
+    if detail.startswith(("stale ", "closed thread:")):
         raise HTTPException(status_code=409, detail=detail) from exc
     raise HTTPException(status_code=400, detail=detail) from exc
 
@@ -108,7 +108,7 @@ def board_spaces(character_id: CharacterId) -> schemas.BoardSpacesResponse:
 def board_threads(
     character_id: CharacterId,
     space_id: int | None = None,
-    status: str | None = None,
+    status: Literal["open", "closed"] | None = None,
     limit: int = 50,
 ) -> schemas.BoardThreadsResponse:
     try:
@@ -121,6 +121,110 @@ def board_threads(
     except ValueError as exc:
         _raise_board_error(exc)
     return schemas.BoardThreadsResponse.model_validate({"threads": rows})
+
+
+@router.patch("/board/spaces/{space_id}", response_model=schemas.BoardRenameSpaceResponse)
+def board_rename_space(
+    space_id: int,
+    payload: schemas.BoardRenameSpaceRequest,
+    character_id: CharacterId,
+) -> schemas.BoardRenameSpaceResponse:
+    try:
+        result = board_core.rename_space(
+            character_id=character_id,
+            space_id=space_id,
+            name=payload.name,
+            expected_name=payload.expected_name,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardRenameSpaceResponse.model_validate(result)
+
+
+@router.patch("/board/threads/{thread_id}", response_model=schemas.BoardThreadUpdateResponse)
+def board_update_thread(
+    thread_id: int,
+    payload: schemas.BoardThreadUpdateRequest,
+    character_id: CharacterId,
+) -> schemas.BoardThreadUpdateResponse:
+    try:
+        result = board_core.update_thread(
+            character_id=character_id,
+            thread_id=thread_id,
+            title=payload.title,
+            expected_version=payload.expected_version,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardThreadUpdateResponse.model_validate(result)
+
+
+@router.get("/board/trash", response_model=schemas.BoardTrashResponse)
+def board_trash(character_id: CharacterId) -> schemas.BoardTrashResponse:
+    return schemas.BoardTrashResponse.model_validate(
+        {"items": board_core.list_trash(character_id=character_id)}
+    )
+
+
+@router.patch(
+    "/board/threads/{thread_id}/status",
+    response_model=schemas.BoardThreadStatusResponse,
+)
+def board_set_thread_status(
+    thread_id: int,
+    payload: schemas.BoardThreadStatusRequest,
+    character_id: CharacterId,
+) -> schemas.BoardThreadStatusResponse:
+    try:
+        result = board_core.set_thread_status(
+            character_id=character_id,
+            thread_id=thread_id,
+            status=payload.status,
+            expected_version=payload.expected_version,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardThreadStatusResponse.model_validate(result)
+
+
+@router.post(
+    "/board/items/{kind}/{item_id}/trash",
+    response_model=schemas.BoardItemActionResponse,
+)
+def board_trash_item(
+    kind: Literal["space", "thread", "post"],
+    item_id: int,
+    character_id: CharacterId,
+) -> schemas.BoardItemActionResponse:
+    try:
+        result = board_core.trash_item(
+            character_id=character_id,
+            kind=kind,
+            item_id=item_id,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardItemActionResponse.model_validate(result)
+
+
+@router.post(
+    "/board/items/{kind}/{item_id}/restore",
+    response_model=schemas.BoardItemActionResponse,
+)
+def board_restore_item(
+    kind: Literal["space", "thread", "post"],
+    item_id: int,
+    character_id: CharacterId,
+) -> schemas.BoardItemActionResponse:
+    try:
+        result = board_core.restore_item(
+            character_id=character_id,
+            kind=kind,
+            item_id=item_id,
+        )
+    except ValueError as exc:
+        _raise_board_error(exc)
+    return schemas.BoardItemActionResponse.model_validate(result)
 
 
 @router.get("/board/threads/{thread_id}", response_model=schemas.BoardThreadDetail)

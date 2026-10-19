@@ -1,30 +1,48 @@
-"""Episode search: vector KNN + graph traversal + ACT-R re-ranking."""
+"""Read-only hybrid episode retrieval with bounded graph/context re-ranking."""
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 
-import structlog
-
-from fravenir.core.activation import base_activation, final_score
+from fravenir.core.activation import base_activation
 from fravenir.core.graph import (
     build_subgraph_from_seeds,
+    expand_episode_candidates,
     fan_out_of,
     reach_episodes,
     s_ji,
 )
+from fravenir.core.lexical import lexical_scores
 from fravenir.core.self_cue import self_cue_terms
 from fravenir.embedding import Embedder
 from fravenir.schemas.config import AppConfig
 from fravenir.storage import paths
 from fravenir.storage.vector import (
-    l2_to_cosine,
+    episode_cosines,
     search_entities_by_vector,
     search_episodes_by_vector,
 )
 
-_ENTITY_TOP_K = 10
+
+def _open_readonly(db_path: str) -> sqlite3.Connection:
+    return sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+
+
+def _open_vdb(db_path: str) -> sqlite3.Connection:
+    import sqlite_vec
+
+    conn = _open_readonly(db_path)
+    try:
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+    except (sqlite3.Error, OSError):
+        conn.close()
+        raise
+    return conn
 
 
 def memory_search(
@@ -39,91 +57,208 @@ def memory_search(
     config: AppConfig,
     embedder: Embedder,
 ) -> list[dict[str, object]]:
-    """Search episodes by vector similarity + graph traversal, re-ranked by ACT-R.
+    """Retrieve by query evidence; use context only within its bounded budget.
 
-    Phase3: vdb_memories で直接ヒットする episode に加え、vdb_entities で近い
-    entity を起点に 2ホップ辿り、関連 episode を associative 候補として合流させる。
-    activation には連想強度 $S_{ji} = S_{max} - ln(fan_j)$ を加算する。
+    Search impressions never update access history or activation counters.
+    Explicit memory_explore accesses remain available to ACT-R. Historical
+    search rows are preserved but excluded from search's recall signal.
     """
-    actr = config.act_r
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
+    if not query.strip():
+        return []
+    actr, retrieval = config.act_r, config.search
     top_k = max(limit * 4, 20)
-
-    q_doc_vec = embedder.encode_query(query)
-    q_topic_vec = embedder.encode_topic(query)
-
-    vdb_mem_path = paths.vdb_memories_path(character_id)
-    vdb_ent_path = paths.vdb_entities_path(character_id)
-
-    direct_hits: list[tuple[int, float]] = []
-    vdb_conn = _open_vdb(str(vdb_mem_path))
+    kv = _open_readonly(str(paths.kv_db_path(character_id)))
+    vdb = None
     try:
-        direct_hits = search_episodes_by_vector(vdb_conn, q_doc_vec, top_k)
-    finally:
-        vdb_conn.close()
-
-    entity_hits: list[tuple[int, float]] = []
-    if vdb_ent_path.exists():
-        vdb_conn = _open_vdb(str(vdb_ent_path))
-        try:
-            entity_hits = search_entities_by_vector(
-                vdb_conn, q_topic_vec, _ENTITY_TOP_K
+        kv.row_factory = sqlite3.Row
+        # One SQLite read transaction gives filters, graph and contents a common snapshot.
+        kv.execute("BEGIN")
+        rows = kv.execute(
+            "SELECT id, content, kind, importance, valid_from, valid_to, supersedes, "
+            "is_suppressed, created_at FROM episodes ORDER BY id"
+        ).fetchall()
+        episodes = {
+            int(r["id"]): dict(r)
+            for r in rows
+            if (include_archived or r["valid_to"] is None)
+            and (
+                not r["is_suppressed"] or (include_suppressed and r["importance"] >= min_importance)
             )
-        finally:
-            vdb_conn.close()
+            and (not kind_filter or r["kind"] in kind_filter)
+        }
+        if not episodes:
+            return []
+        eligible = set(episodes)
+        lexical = lexical_scores(query, {ep: str(r["content"]) for ep, r in episodes.items()})
+        lex_ids = set(sorted(lexical, key=lambda ep: (-lexical[ep], ep))[:top_k])
+        query_vector = embedder.encode_query(query)
+        vdb = _open_vdb(str(paths.vdb_memories_path(character_id)))
+        vdb.execute("BEGIN")
+        # Filtered-out nearest neighbors must not consume the candidate window.
+        k = min(top_k, 4096)
+        while True:
+            hits = search_episodes_by_vector(vdb, query_vector, k)
+            direct = [ep for ep, _ in hits if ep in eligible][:top_k]
+            if len(direct) >= top_k or len(hits) < k or k == 4096:
+                break
+            k = min(k * 2, 4096)
+        direct_ids = set(direct)
+        initial_ids = direct_ids | lex_ids
+        cosine = episode_cosines(vdb, query_vector, initial_ids)
 
-    kv_conn = sqlite3.connect(str(paths.kv_db_path(character_id)))
-    try:
-        now = datetime.now(UTC)
+        def relevance(ep: int) -> float:
+            weight = retrieval.lexical_weight
+            return (1 - weight) * cosine.get(ep, 0.0) + weight * lexical.get(ep, 0.0)
 
-        cue_terms = self_cue_terms(kv_conn)
-        self_cue_hit = any(t and t in query for t in cue_terms)
+        seeds = sorted(initial_ids, key=lambda ep: (-relevance(ep), ep))
+        seed_scores = {
+            ep: relevance(ep) for ep in seeds[: retrieval.graph_seed_limit] if relevance(ep) > 0
+        }
+        graph_paths = expand_episode_candidates(
+            kv,
+            seed_scores,
+            eligible,
+            max_hops=retrieval.graph_max_hops,
+            fan_limit=retrieval.graph_fan_limit,
+            max_candidates=retrieval.graph_max_candidates,
+        )
 
-        seed_ids = [eid for eid, _ in entity_hits]
-        self_entity_ids: list[int] = []
-        if self_cue_hit:
-            self_entity_ids = _fetch_self_entity_ids(kv_conn)
-            seed_ids = list(dict.fromkeys(seed_ids + self_entity_ids))
-
-        assoc_contrib, assoc_episode_ids, boost_episode_ids = _graph_contributions(
-            kv_conn,
-            seed_ids,
+        # Retain entity/self-hub recall for compatibility, but do not let entity
+        # activation replace the candidate episode's query evidence.
+        entity_ids: list[int] = []
+        ent_path = paths.vdb_entities_path(character_id)
+        if ent_path.exists():
+            entities = _open_vdb(str(ent_path))
+            try:
+                entity_ids = [
+                    ep
+                    for ep, _ in search_entities_by_vector(
+                        entities, embedder.encode_topic(query), 10
+                    )
+                ]
+                entity_ids = [
+                    ep
+                    for ep in entity_ids
+                    if kv.execute(
+                        "SELECT 1 FROM entities WHERE id=? AND valid_to IS NULL", (ep,)
+                    ).fetchone()
+                ]
+            finally:
+                entities.close()
+        self_ids = (
+            _fetch_self_entity_ids(kv)
+            if any(term and term in query for term in self_cue_terms(kv))
+            else []
+        )
+        assoc, assoc_ids, boost_ids = _graph_contributions(
+            kv,
+            list(dict.fromkeys(entity_ids + self_ids)),
             s_max=actr.s_max,
-            boost_seed_ids=set(self_entity_ids),
+            boost_seed_ids=set(self_ids),
             boost_beta=actr.self_boost_beta,
         )
-
-        if not direct_hits and not assoc_episode_ids:
-            return []
-
-        results = _rank_and_filter(
-            kv_conn,
-            direct_hits=direct_hits,
-            assoc_episode_ids=assoc_episode_ids,
-            assoc_contrib=assoc_contrib,
-            boost_episode_ids=boost_episode_ids,
-            now=now,
-            kind_filter=kind_filter,
-            min_importance=min_importance,
-            include_archived=include_archived,
-            include_suppressed=include_suppressed,
-            base_decay=actr.base_decay,
-            access_history_limit=actr.access_history_limit,
-            alpha_sim=actr.alpha_similarity,
-            alpha_imp=actr.alpha_importance,
-            limit=limit,
-        )
-        _record_access(kv_conn, results, now)
+        candidates = initial_ids | set(graph_paths) | (assoc_ids & eligible)
+        cosine.update(episode_cosines(vdb, query_vector, candidates - initial_ids))
+        now = datetime.now(UTC)
+        ranked: list[dict[str, object]] = []
+        # A neighbor needs its own query evidence; a path alone cannot promote
+        # an unrelated high-degree hub. The floor scales with the query's seeds.
+        graph_floor = max(seed_scores.values(), default=0.0) / 2
+        for ep in sorted(candidates):
+            row = episodes[ep]
+            rel = relevance(ep)
+            if ep not in initial_ids and ep not in assoc_ids and rel < graph_floor:
+                continue
+            base = base_activation(
+                kv,
+                "episode",
+                ep,
+                actr.base_decay,
+                now,
+                actr.access_history_limit,
+                include_search_results=False,
+            )
+            activation = base + assoc.get(ep, 0.0)
+            recall = (math.tanh(base / 2) + 1) / 2
+            importance = max(0.0, min((int(row["importance"]) - 1) / 2, 1.0))
+            path = graph_paths.get(ep)
+            graph = min(rel, path.confidence) if path else 0.0
+            entity_context = min(assoc.get(ep, 0.0) / max(actr.s_max, 1.0), 1.0)
+            graph = max(graph, entity_context * rel)
+            self_context = float(ep in boost_ids) * actr.self_boost_beta
+            context = (
+                retrieval.context_budget
+                * (recall + actr.alpha_importance * importance + graph + self_context)
+                / (2 + actr.alpha_importance + actr.self_boost_beta)
+            )
+            source = (
+                "self_boost"
+                if ep in boost_ids
+                else ("direct" if ep in direct_ids or ep in lex_ids else "associative")
+            )
+            ranked.append(
+                {
+                    "episode_id": ep,
+                    "content": row["content"],
+                    "kind": row["kind"],
+                    "importance": row["importance"],
+                    "activation": activation,
+                    "score": rel + context,
+                    "valid_from": row["valid_from"],
+                    "valid_to": row["valid_to"],
+                    "supersedes": row["supersedes"],
+                    "created_at": row["created_at"],
+                    "source": source,
+                    "score_components": {
+                        "cosine": cosine.get(ep, 0.0),
+                        "has_vector": ep in cosine,
+                        "lexical": lexical.get(ep, 0.0),
+                        "relevance": rel,
+                        "base_activation": base,
+                        "association_activation": assoc.get(ep, 0.0),
+                        "bounded_activation": recall,
+                        "normalized_importance": importance,
+                        "graph": graph,
+                        "context": context,
+                        "vector_candidate": ep in direct_ids,
+                        "lexical_candidate": ep in lex_ids,
+                        "graph_candidate": path is not None,
+                    },
+                    "graph_paths": [
+                        {
+                            "seed_episode_id": path.seed_id,
+                            "confidence": path.confidence,
+                            "edges": list(path.edges),
+                        }
+                    ]
+                    if path
+                    else [],
+                }
+            )
+        ranked.sort(key=lambda row: (-float(str(row["score"])), int(str(row["episode_id"]))))
+        results = ranked[:limit]
+        for result in results:
+            result["episode_sources"] = [
+                dict(row)
+                for row in kv.execute(
+                    "SELECT source_type, source_id, source_revision, relation, actor_id, "
+                    "created_at FROM episode_sources WHERE episode_id=? "
+                    "ORDER BY source_type,source_id,relation",
+                    (result["episode_id"],),
+                )
+            ]
+        return results
     finally:
-        kv_conn.close()
-
-    return results
+        if vdb is not None:
+            vdb.close()
+        kv.close()
 
 
 def _fetch_self_entity_ids(conn: sqlite3.Connection) -> list[int]:
     """is_self=1 かつ valid_to IS NULL の entity ids を返す。"""
-    rows = conn.execute(
-        "SELECT id FROM entities WHERE is_self = 1 AND valid_to IS NULL"
-    ).fetchall()
+    rows = conn.execute("SELECT id FROM entities WHERE is_self = 1 AND valid_to IS NULL").fetchall()
     return [int(r[0]) for r in rows]
 
 
@@ -169,133 +304,3 @@ def _graph_contributions(
                 boost_reached.add(ep_id)
 
     return contrib, reached, boost_reached
-
-
-def _rank_and_filter(
-    kv_conn: sqlite3.Connection,
-    *,
-    direct_hits: list[tuple[int, float]],
-    assoc_episode_ids: set[int],
-    assoc_contrib: dict[int, float],
-    boost_episode_ids: set[int],
-    now: datetime,
-    kind_filter: list[str] | None,
-    min_importance: int,
-    include_archived: bool,
-    include_suppressed: bool,
-    base_decay: float,
-    access_history_limit: int,
-    alpha_sim: float,
-    alpha_imp: float,
-    limit: int,
-) -> list[dict[str, object]]:
-    l2_by_id = {ep_id: l2 for ep_id, l2 in direct_hits}
-    direct_ids = set(l2_by_id.keys())
-    all_ids = direct_ids | assoc_episode_ids
-    if not all_ids:
-        return []
-
-    placeholders = ",".join("?" * len(all_ids))
-    rows = kv_conn.execute(
-        f"""
-        SELECT id, content, kind, importance, valid_from, valid_to,
-               supersedes, is_suppressed, created_at
-        FROM episodes
-        WHERE id IN ({placeholders})
-        """,
-        tuple(all_ids),
-    ).fetchall()
-
-    scored: list[tuple[float, dict[str, object]]] = []
-    for row in rows:
-        (ep_id, content, kind, importance, valid_from, valid_to,
-         supersedes, is_suppressed, created_at) = row
-
-        if not include_archived and valid_to is not None:
-            continue
-        if is_suppressed:
-            if not include_suppressed:
-                continue
-            if importance < min_importance:
-                continue
-        if kind_filter and kind not in kind_filter:
-            continue
-
-        activation = base_activation(
-            kv_conn, "episode", ep_id, base_decay, now, access_history_limit
-        )
-        sji_bonus = assoc_contrib.get(ep_id, 0.0)
-        activation += sji_bonus
-
-        is_direct = ep_id in direct_ids
-        cosine_sim = l2_to_cosine(l2_by_id[ep_id]) if is_direct else 0.0
-
-        boost_applied = ep_id in boost_episode_ids
-        # boost_beta は既に _graph_contributions で sji_bonus に加算済み
-
-        score = final_score(activation, cosine_sim, importance, alpha_sim, alpha_imp)
-
-        if boost_applied:
-            source = "self_boost"
-        elif is_direct:
-            source = "direct"
-        else:
-            source = "associative"
-
-        scored.append((
-            score,
-            {
-                "episode_id": ep_id,
-                "content": content,
-                "kind": kind,
-                "importance": importance,
-                "activation": activation,
-                "score": score,
-                "valid_from": valid_from,
-                "valid_to": valid_to,
-                "supersedes": supersedes,
-                "created_at": created_at,
-                "source": source,
-            },
-        ))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [item for _, item in scored[:limit]]
-
-
-def _record_access(
-    kv_conn: sqlite3.Connection,
-    results: list[dict[str, object]],
-    now: datetime,
-) -> None:
-    for item in results:
-        ep_id = item["episode_id"]
-        kv_conn.execute(
-            "INSERT INTO access_history(node_type, node_id, accessed_at, source) VALUES (?,?,?,?)",
-            ("episode", ep_id, now.isoformat(), item["source"]),
-        )
-        kv_conn.execute(
-            """
-            UPDATE episodes
-            SET activation_count = activation_count + 1,
-                last_activated_at = ?
-            WHERE id = ?
-            """,
-            (now.isoformat(), ep_id),
-        )
-    kv_conn.commit()
-
-
-def _open_vdb(db_path: str) -> sqlite3.Connection:
-    import sqlite_vec
-
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
-        conn.enable_load_extension(False)
-        return conn
-    except (sqlite3.Error, OSError) as e:
-        _log = structlog.get_logger(__name__)
-        _log.exception("vdb_open_error", db_path=db_path, error=str(e))
-        raise RuntimeError(f"failed to open vector DB at {db_path}") from e

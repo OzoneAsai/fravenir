@@ -1,0 +1,1554 @@
+{
+  "baseline_commit": "9177de915656a6fee3fcdb8117cb6b17ee428dc0",
+  "evaluation_time_utc": "2026-10-15T15:00:00+00:00",
+  "snapshot_counts": {
+    "episodes": 174,
+    "vectors": 174,
+    "vector_dim": 768,
+    "entities": 1,
+    "relations": 361,
+    "episode_relations": 239,
+    "access_history": 4491,
+    "search_display_accesses": 4484,
+    "explicit_explore_accesses": 7
+  },
+  "snapshot_sha256": {
+    "kv.sqlite": "67e35a79c39c71228e347198d9a8178540ecc34cd46b856b4eb660e621373a2a",
+    "vdb_entities.db": "a5c3d1cf8bf9b5c53881128ee6e4e990297449cb464025b6b42cc001c63ae680",
+    "vdb_memories.db": "c9b454a195a0f4563614650b950e0ccb84725135ac9d29353b760a7a60bdcdbd",
+    "vdb_relations.db": "f56b01342007137b0af78a13d72bc5cb4604143fe2931986c197b1b2448bebfd"
+  },
+  "embedding_cache_sha256": "74c6c500bd58bb2ce0b36dd7635c08689d1a32700b20da34d7ef6d02ea6c39e2",
+  "judgments": "Developer-graded on private contents; fixed before after-ranking; grade>=2 for Hit/MRR; grade=3 for answer_hit1; no held-out set.",
+  "variants": {
+    "before": {
+      "metrics": {
+        "hit1": 0.1,
+        "hit5": 0.7,
+        "answer_hit1": 0.1,
+        "mrr5": 0.33999999999999997,
+        "ndcg5": 0.23614697772360388
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            159,
+            149,
+            153,
+            104,
+            100
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 0.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.0,
+            "ndcg5": 0.04926243541387837
+          },
+          "retrieval_ms": 55.07079999733833
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            149,
+            153,
+            147,
+            174,
+            145
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.2,
+            "ndcg5": 0.06993257578175528
+          },
+          "retrieval_ms": 48.63230000046315
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            98,
+            149,
+            96,
+            153,
+            11
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 0.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.0,
+            "ndcg5": 0.0
+          },
+          "retrieval_ms": 45.637600000191014
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            159,
+            153,
+            147,
+            104,
+            174
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 0.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.0,
+            "ndcg5": 0.0
+          },
+          "retrieval_ms": 65.03829999928712
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            171,
+            159,
+            149,
+            147,
+            174
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.5,
+            "ndcg5": 0.4293046201922583
+          },
+          "retrieval_ms": 83.84070000101929
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            159,
+            153,
+            149,
+            147,
+            174
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.5,
+            "ndcg5": 0.2409808548188524
+          },
+          "retrieval_ms": 37.18010000011418
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            98,
+            153,
+            165,
+            167,
+            164
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.2,
+            "ndcg5": 0.2649363795273207
+          },
+          "retrieval_ms": 37.747599999420345
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            159,
+            149,
+            147,
+            135,
+            174
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.5,
+            "ndcg5": 0.3771928014337997
+          },
+          "retrieval_ms": 38.41390000161482
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            171,
+            159,
+            147,
+            135,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.5309719078307141
+          },
+          "retrieval_ms": 51.37680000188993
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            159,
+            56,
+            48,
+            35,
+            158
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.5,
+            "ndcg5": 0.3988882022374598
+          },
+          "retrieval_ms": 50.94630000166944
+        }
+      ]
+    },
+    "after": {
+      "metrics": {
+        "hit1": 1.0,
+        "hit5": 1.0,
+        "answer_hit1": 0.9,
+        "mrr5": 1.0,
+        "ndcg5": 0.9270152591803097
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            105,
+            108,
+            99,
+            113,
+            104
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 128.60359999831417
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            118,
+            145,
+            101,
+            149
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9599800580361362
+          },
+          "retrieval_ms": 118.34789999920758
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            105,
+            108,
+            99,
+            100,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 131.33550000202376
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            103,
+            104,
+            159,
+            68
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8034963425372434
+          },
+          "retrieval_ms": 141.7513999986113
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 125.707399998646
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            153,
+            152,
+            156,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8715370768264441
+          },
+          "retrieval_ms": 144.27919999798178
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            95,
+            139
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9157588632050412
+          },
+          "retrieval_ms": 126.76640000063344
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            147,
+            174,
+            141,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8929701120262551
+          },
+          "retrieval_ms": 139.16889999745763
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            171,
+            162,
+            174,
+            71
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 125.05500000042957
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            158,
+            159,
+            36,
+            173,
+            35
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8497209977658944
+          },
+          "retrieval_ms": 122.1568999972078
+        }
+      ]
+    },
+    "semantic-only": {
+      "metrics": {
+        "hit1": 0.9,
+        "hit5": 1.0,
+        "answer_hit1": 0.8,
+        "mrr5": 0.95,
+        "ndcg5": 0.8210191414849053
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            108,
+            105,
+            99,
+            113,
+            111
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 128.1146000001172
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            118,
+            145,
+            149,
+            119
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.7783190202964165
+          },
+          "retrieval_ms": 112.90770000050543
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            105,
+            108,
+            113,
+            138,
+            110
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.7659213120899409
+          },
+          "retrieval_ms": 120.6964999983029
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            103,
+            123,
+            128,
+            121
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8034963425372434
+          },
+          "retrieval_ms": 135.3957999999693
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            173
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 133.98579999920912
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            153,
+            156,
+            152,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8715370768264441
+          },
+          "retrieval_ms": 146.0440999981074
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            139,
+            167
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9534989709086827
+          },
+          "retrieval_ms": 120.56229999870993
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            159,
+            147,
+            138,
+            149
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8002668253442561
+          },
+          "retrieval_ms": 146.95429999846965
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            35,
+            171,
+            151,
+            159
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.7112114007400312
+          },
+          "retrieval_ms": 133.60539999848697
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            159,
+            35,
+            158,
+            36,
+            157
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.5,
+            "ndcg5": 0.5725621832938755
+          },
+          "retrieval_ms": 134.5091000002867
+        }
+      ]
+    },
+    "weight-020": {
+      "metrics": {
+        "hit1": 0.9,
+        "hit5": 1.0,
+        "answer_hit1": 0.8,
+        "mrr5": 0.95,
+        "ndcg5": 0.911235949410148
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            108,
+            105,
+            99,
+            113,
+            104
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 111.50600000109989
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            118,
+            145,
+            101,
+            149
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9599800580361362
+          },
+          "retrieval_ms": 123.18170000071405
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            105,
+            108,
+            99,
+            100,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 144.6466999987024
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            103,
+            104,
+            159,
+            123
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8034963425372434
+          },
+          "retrieval_ms": 141.90450000023702
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 137.869000001956
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            153,
+            152,
+            156,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8715370768264441
+          },
+          "retrieval_ms": 145.6398000009358
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            139,
+            95
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9253315217312345
+          },
+          "retrieval_ms": 189.182999998593
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            147,
+            174,
+            141,
+            159
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8609237794637837
+          },
+          "retrieval_ms": 108.14620000019204
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            171,
+            174,
+            71,
+            162
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 97.44830000272486
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            159,
+            158,
+            35,
+            36,
+            173
+          ],
+          "metrics": {
+            "hit1": 0.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 0.5,
+            "ndcg5": 0.7144015741005567
+          },
+          "retrieval_ms": 130.4636999993818
+        }
+      ]
+    },
+    "weight-050": {
+      "metrics": {
+        "hit1": 1.0,
+        "hit5": 1.0,
+        "answer_hit1": 0.9,
+        "mrr5": 1.0,
+        "ndcg5": 0.9121308247179736
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            105,
+            108,
+            99,
+            113,
+            104
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 116.39039999863598
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            118,
+            101,
+            145,
+            149
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 116.86230000123032
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            105,
+            108,
+            99,
+            100,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 138.33080000040354
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            103,
+            104,
+            159,
+            68
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8034963425372434
+          },
+          "retrieval_ms": 137.0999999999185
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 120.56700000175624
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            153,
+            152,
+            156,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8715370768264441
+          },
+          "retrieval_ms": 138.73760000205948
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            95,
+            90
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8312565156726963
+          },
+          "retrieval_ms": 112.25700000068173
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            147,
+            174,
+            141,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8929701120262551
+          },
+          "retrieval_ms": 131.54820000272593
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            171,
+            162,
+            174,
+            71
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 118.40329999904498
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            158,
+            159,
+            36,
+            173,
+            162
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.7686699173049337
+          },
+          "retrieval_ms": 122.26780000128201
+        }
+      ]
+    },
+    "weight-070": {
+      "metrics": {
+        "hit1": 1.0,
+        "hit5": 1.0,
+        "answer_hit1": 0.9,
+        "mrr5": 1.0,
+        "ndcg5": 0.9116026810727653
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            105,
+            99,
+            108,
+            104,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9947185635479171
+          },
+          "retrieval_ms": 127.21950000195648
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            118,
+            101,
+            145,
+            149
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 130.6246000021929
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            108,
+            105,
+            99,
+            100,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 123.62299999949755
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            103,
+            104,
+            159,
+            68
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8034963425372434
+          },
+          "retrieval_ms": 134.80479999998352
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 101.91990000021178
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            153,
+            152,
+            156,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8715370768264441
+          },
+          "retrieval_ms": 106.58279999915976
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            95,
+            90
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8312565156726963
+          },
+          "retrieval_ms": 89.69649999926332
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            147,
+            174,
+            141,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8929701120262551
+          },
+          "retrieval_ms": 111.93350000030478
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            171,
+            162,
+            174,
+            71
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 95.67819999938365
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            158,
+            159,
+            36,
+            173,
+            162
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.7686699173049337
+          },
+          "retrieval_ms": 96.86130000045523
+        }
+      ]
+    },
+    "lexical-only": {
+      "metrics": {
+        "hit1": 1.0,
+        "hit5": 1.0,
+        "answer_hit1": 1.0,
+        "mrr5": 1.0,
+        "ndcg5": 0.9110293380863824
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            105,
+            99,
+            108,
+            104,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9947185635479171
+          },
+          "retrieval_ms": 92.99430000100983
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            101,
+            118,
+            145,
+            110
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 91.62329999890062
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            108,
+            105,
+            99,
+            100,
+            11
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9331825676523733
+          },
+          "retrieval_ms": 93.62449999753153
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            104,
+            103,
+            159,
+            19
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.738992290236036
+          },
+          "retrieval_ms": 102.6804999964952
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 115.1027999985672
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            152,
+            153,
+            156,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9488624617780657
+          },
+          "retrieval_ms": 138.4310000030382
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            95,
+            90
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8312565156726963
+          },
+          "retrieval_ms": 121.71529999977793
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            147,
+            174,
+            141,
+            122
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8609237794637837
+          },
+          "retrieval_ms": 99.71800000130315
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            171,
+            162,
+            174,
+            71
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 89.06480000223382
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            158,
+            173,
+            36,
+            162,
+            159
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8489789197007895
+          },
+          "retrieval_ms": 96.20779999750084
+        }
+      ]
+    },
+    "no-episode-graph": {
+      "metrics": {
+        "hit1": 1.0,
+        "hit5": 1.0,
+        "answer_hit1": 0.9,
+        "mrr5": 1.0,
+        "ndcg5": 0.9270152591803097
+      },
+      "rankings": [
+        {
+          "query": "Edge0",
+          "ids": [
+            105,
+            108,
+            99,
+            113,
+            104
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 82.45090000127675
+        },
+        {
+          "query": "CHUNITHM",
+          "ids": [
+            116,
+            118,
+            145,
+            101,
+            149
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9599800580361362
+          },
+          "retrieval_ms": 83.0497999995714
+        },
+        {
+          "query": "MoE expert SSD offload",
+          "ids": [
+            105,
+            108,
+            99,
+            100,
+            113
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 86.14590000070166
+        },
+        {
+          "query": "29分枠 理由",
+          "ids": [
+            130,
+            103,
+            104,
+            159,
+            68
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8034963425372434
+          },
+          "retrieval_ms": 96.42060000260244
+        },
+        {
+          "query": "ChatGPT Classic Ghidra",
+          "ids": [
+            162,
+            159,
+            174,
+            160,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9766891414060817
+          },
+          "retrieval_ms": 152.54429999913555
+        },
+        {
+          "query": "Nicoboxをデスクトップ化したきっかけ",
+          "ids": [
+            153,
+            152,
+            156,
+            166,
+            174
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 0.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8715370768264441
+          },
+          "retrieval_ms": 85.48080000036862
+        },
+        {
+          "query": "WorldWindow 静かな世界",
+          "ids": [
+            164,
+            172,
+            92,
+            95,
+            139
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.9157588632050412
+          },
+          "retrieval_ms": 86.27699999851757
+        },
+        {
+          "query": "シェーダーを学びたい",
+          "ids": [
+            150,
+            147,
+            174,
+            141,
+            148
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8929701120262551
+          },
+          "retrieval_ms": 105.4762000021583
+        },
+        {
+          "query": "PrintCpp",
+          "ids": [
+            157,
+            171,
+            162,
+            174,
+            71
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 1.0
+          },
+          "retrieval_ms": 100.95129999899655
+        },
+        {
+          "query": "PrintSwift",
+          "ids": [
+            158,
+            159,
+            36,
+            35,
+            173
+          ],
+          "metrics": {
+            "hit1": 1.0,
+            "hit5": 1.0,
+            "answer_hit1": 1.0,
+            "mrr5": 1.0,
+            "ndcg5": 0.8497209977658944
+          },
+          "retrieval_ms": 104.73000000274624
+        }
+      ]
+    }
+  },
+  "graph_ablation": "No change to default top-5 quality on these ten queries. Controlled regression proves recovery outside KNN and lexical windows; do not attribute aggregate gain to graph."
+}

@@ -45,6 +45,7 @@ class StatsResponse(BaseModel):
 class GraphNodeEpisodeData(BaseModel):
     id: str
     label: str
+    search_text: str = ""
     type: str
     kind: str
     importance: int
@@ -56,6 +57,7 @@ class GraphNodeEpisodeData(BaseModel):
 class GraphNodeEntityData(BaseModel):
     id: str
     label: str
+    search_text: str = ""
     type: str
     entity_type: str
     is_self: bool
@@ -63,8 +65,17 @@ class GraphNodeEntityData(BaseModel):
     supersedes: int | None
 
 
+class GraphNodeBoardData(BaseModel):
+    id: str
+    label: str
+    search_text: str = ""
+    type: Literal["thread", "post"]
+    is_active: bool
+    supersedes: int | None = None
+
+
 class GraphNode(BaseModel):
-    data: GraphNodeEpisodeData | GraphNodeEntityData
+    data: GraphNodeEpisodeData | GraphNodeEntityData | GraphNodeBoardData
 
 
 class GraphEdgeMentionsData(BaseModel):
@@ -73,6 +84,10 @@ class GraphEdgeMentionsData(BaseModel):
     target: str
     type: str
     is_active: bool
+    predicate: str = "mentions"
+    strength: float = 1.0
+    relation_id: int | None = None
+    description: str | None = None
 
 
 class GraphEdgeRelationData(BaseModel):
@@ -83,6 +98,8 @@ class GraphEdgeRelationData(BaseModel):
     predicate: str
     strength: float
     is_active: bool
+    relation_id: int | None = None
+    description: str | None = None
 
 
 class GraphEdge(BaseModel):
@@ -432,3 +449,60 @@ class BoardSearchItem(BaseModel):
 
 class BoardSearchResponse(BaseModel):
     results: list[BoardSearchItem]
+
+
+class BoardRenameSpaceRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    expected_name: str = Field(min_length=1, max_length=128)
+
+
+class BoardRenameSpaceResponse(BaseModel):
+    space_id: int
+    name: str
+    changed: bool
+
+
+class BoardThreadUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    expected_version: int = Field(ge=1)
+
+
+class BoardThreadUpdateResponse(BaseModel):
+    thread_id: int
+    title: str
+    status: Literal["open", "closed"]
+    version: int
+    changed: bool
+
+
+class BoardThreadStatusRequest(BaseModel):
+    status: Literal["open", "closed"]
+    expected_version: int = Field(ge=1)
+
+
+class BoardThreadStatusResponse(BaseModel):
+    thread_id: int
+    status: Literal["open", "closed"]
+    version: int
+    changed: bool
+
+
+class BoardTrashItem(BaseModel):
+    kind: Literal["space", "thread", "post"]
+    item_id: int
+    title: str
+    detail: str | None
+    deleted_at: str
+    space_name: str | None
+    thread_id: int | None
+
+
+class BoardTrashResponse(BaseModel):
+    items: list[BoardTrashItem]
+
+
+class BoardItemActionResponse(BaseModel):
+    kind: Literal["space", "thread", "post"]
+    item_id: int
+    changed: bool
+    deleted_at: str | None = None

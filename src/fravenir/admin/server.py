@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 
+from fravenir.admin.activity_api import router as activity_router
 from fravenir.admin.api import router
 from fravenir.storage.paths import kv_db_path, vdb_entities_path
 
@@ -135,6 +136,7 @@ def create_app(character_id: str) -> FastAPI:
         return response
 
     app.include_router(router, prefix="/api")
+    app.include_router(activity_router, prefix="/api")
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 

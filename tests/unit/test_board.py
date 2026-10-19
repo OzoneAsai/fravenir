@@ -17,7 +17,11 @@ from fravenir.core.board import (
     list_spaces,
     list_threads,
     organize_thread,
+    rename_space,
     search_board,
+    set_thread_status,
+    trash_item,
+    update_thread,
 )
 from fravenir.storage.sqlite_init import init_kv
 
@@ -27,6 +31,129 @@ def _init(tmp_project: Path, character_id: str = "board_test") -> str:
     data.mkdir(parents=True)
     init_kv(data / "kv.sqlite")
     return character_id
+
+
+def test_space_rename_preserves_children_and_rejects_conflicts(tmp_project: Path) -> None:
+    character_id = _init(tmp_project)
+    space = create_space(character_id=character_id, name="Original", description="Keep this")
+    space_id = int(space["space_id"])
+    thread = create_thread(
+        character_id=character_id,
+        space_id=space_id,
+        title="Keep this thread",
+        author_kind="human",
+        author_display_name="Admin",
+        initial_post="Keep this post",
+    )
+    rename_space(
+        character_id=character_id,
+        space_id=space_id,
+        name="Renamed",
+        expected_name="Original",
+    )
+    listed = list_spaces(character_id=character_id)[0]
+    assert (listed["id"], listed["name"], listed["description"], listed["thread_count"]) == (
+        space_id,
+        "Renamed",
+        "Keep this",
+        1,
+    )
+    detail = get_thread(character_id=character_id, thread_id=int(thread["thread_id"]))
+    assert detail["thread"]["space_id"] == space_id
+    assert detail["posts"][0]["body"] == "Keep this post"
+    with pytest.raises(ValueError, match="stale space name"):
+        rename_space(
+            character_id=character_id,
+            space_id=space_id,
+            name="Stale",
+            expected_name="Original",
+        )
+    create_space(character_id=character_id, name="Taken")
+    with pytest.raises(ValueError, match="already exists"):
+        rename_space(
+            character_id=character_id,
+            space_id=space_id,
+            name="Taken",
+            expected_name="Renamed",
+        )
+    trash_item(character_id=character_id, kind="space", item_id=space_id)
+    with pytest.raises(ValueError, match="space not found"):
+        rename_space(
+            character_id=character_id,
+            space_id=space_id,
+            name="Hidden",
+            expected_name="Renamed",
+        )
+
+
+def test_thread_title_and_archive_share_concurrency_and_preserve_posts(tmp_project: Path) -> None:
+    character_id = _init(tmp_project)
+    space = create_space(character_id=character_id, name="Board")
+    thread = create_thread(
+        character_id=character_id,
+        space_id=int(space["space_id"]),
+        title="Original",
+        author_kind="human",
+        author_display_name="Admin",
+        initial_post="Keep this body",
+    )
+    thread_id = int(thread["thread_id"])
+    renamed = update_thread(
+        character_id=character_id,
+        thread_id=thread_id,
+        title="Renamed",
+        expected_version=1,
+    )
+    assert renamed["version"] == 2
+    closed = set_thread_status(
+        character_id=character_id,
+        thread_id=thread_id,
+        status="closed",
+        expected_version=2,
+    )
+    assert closed["version"] == 3
+    with pytest.raises(ValueError, match="stale thread version"):
+        update_thread(
+            character_id=character_id,
+            thread_id=thread_id,
+            title="Stale",
+            expected_version=2,
+        )
+    updated = update_thread(
+        character_id=character_id,
+        thread_id=thread_id,
+        title="Archived title",
+        expected_version=3,
+    )
+    assert (updated["status"], updated["version"]) == ("closed", 4)
+    with pytest.raises(ValueError, match="closed thread"):
+        add_post(
+            character_id=character_id,
+            thread_id=thread_id,
+            body="Blocked",
+            author_kind="human",
+            author_display_name="Admin",
+        )
+    set_thread_status(
+        character_id=character_id,
+        thread_id=thread_id,
+        status="open",
+        expected_version=4,
+    )
+    detail = get_thread(character_id=character_id, thread_id=thread_id)
+    assert detail["thread"]["title"] == "Archived title"
+    assert detail["thread"]["status"] == "open"
+    assert len(detail["posts"]) == 1
+    assert detail["posts"][0]["body"] == "Keep this body"
+    assert detail["posts"][0]["revision"] == 1
+    trash_item(character_id=character_id, kind="space", item_id=int(space["space_id"]))
+    with pytest.raises(ValueError, match="thread not found"):
+        update_thread(
+            character_id=character_id,
+            thread_id=thread_id,
+            title="Hidden",
+            expected_version=5,
+        )
 
 
 def test_board_roundtrip(tmp_project: Path) -> None:

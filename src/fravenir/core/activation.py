@@ -13,20 +13,27 @@ def base_activation(
     decay: float,
     now: datetime,
     limit: int = 100,
+    *,
+    include_search_results: bool = True,
 ) -> float:
     """Compute B_i = ln(Σ t_k^{-decay}) over access history.
 
     Returns 0.0 when there is no access history so that new records
     can still surface via cosine similarity and importance weighting.
+
+    Search can exclude legacy result-display sources without rewriting history.
+    The default retains compact/explore semantics and existing callers. Filtering
+    happens before LIMIT so impressions cannot evict deliberate accesses.
     """
     rows: list[tuple[str]] = conn.execute(
         """
         SELECT accessed_at FROM access_history
         WHERE node_type = ? AND node_id = ?
+          AND (? OR source NOT IN ('direct', 'associative', 'self_boost', 'search_impression'))
         ORDER BY accessed_at DESC
         LIMIT ?
         """,
-        (node_type, node_id, limit),
+        (node_type, node_id, include_search_results, limit),
     ).fetchall()
     if not rows:
         return 0.0

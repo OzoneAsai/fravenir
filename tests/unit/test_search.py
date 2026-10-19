@@ -91,7 +91,7 @@ class TestMemorySearch:
         )
         assert len(results) <= 3
 
-    def test_access_history_recorded(self, tmp_project: Path) -> None:
+    def test_search_does_not_activate_displayed_results(self, tmp_project: Path) -> None:
         char_id = _make_character(tmp_project)
         config = _make_config(char_id)
         embedder = _make_embedder()
@@ -109,7 +109,9 @@ class TestMemorySearch:
             (r["episode_id"],),
         ).fetchone()
         assert row is not None
-        assert row[0] >= 1
+        assert row[0] == 0
+        assert kv.execute("SELECT COUNT(*) FROM access_history").fetchone()[0] == 0
+        kv.close()
 
     def test_kind_filter(self, tmp_project: Path) -> None:
         char_id = _make_character(tmp_project)

@@ -1,5 +1,10 @@
 # fravenir
 
+Windows で稼働中の Fravenir の更新ソースと Planet OAuth を含む配布です。
+認証サーバーは [`deploy/planet-oauth/`](deploy/planet-oauth/README.md)、
+Windows サービス・認証ブリッジは [`deploy/windows/`](deploy/windows/README.md) を参照してください。
+DB・認証情報は含まれません。[ソース配布の記録](deploy/SOURCE-PUBLICATION.md)。
+
 [日本語](README.md) | [English](README.en.md)
 
 > [!NOTE]

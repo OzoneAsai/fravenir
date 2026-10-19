@@ -31,7 +31,7 @@ function escapeHtml(s) {
 const SPREAD_DEFAULT = 3.0;
 const state = {
   scope: 'active',
-  surface: localStorage.getItem('admin_surface') || 'graph',
+  surface: new URLSearchParams(window.location.search).get('surface') || localStorage.getItem('admin_surface') || 'graph',
   view: localStorage.getItem('admin_view') || 'panel',
   theme: localStorage.getItem('admin_theme') || 'dark',
   spread: parseFloat(localStorage.getItem('admin_spread')) || SPREAD_DEFAULT,
@@ -42,7 +42,7 @@ const state = {
     degree: 0,
   },
   search: { query: '', hops: 1 },
-  focus: { nodeId: null, hops: 2 },
+  focus: { nodeId: null, hops: 1 },
   selected: null,
   graphData: null,
   stats: null,
@@ -54,6 +54,9 @@ const state = {
     thread: null,
     selectedSpaceId: null,
     selectedThreadId: null,
+    threadStatus: 'open',
+    trashMode: false,
+    trashItems: [],
   },
 };
 
@@ -75,298 +78,39 @@ async function apiJson(path, method, payload) {
   });
 }
 
-// ─── Cytoscape ──────────────────────────────────────────────────────────────
+// ─── Graph canvas ───────────────────────────────────────────────────────────
+let graphView = null;
 function initCytoscape(elements) {
-  const t = THEMES[state.theme];
-  const cy = cytoscape({
-    container: document.getElementById('cy'),
-    elements: elements,
-    minZoom: 0.1,
-    maxZoom: 3,
-    wheelSensitivity: 0.3,
-    style: [
-      {
-        selector: 'node',
-        style: {
-          label: 'data(label)',
-          color: t.nodeText,
-          'font-size': '11px',
-          'text-wrap': 'ellipsis',
-          'text-max-width': '80px',
-          width: 32,
-          height: 32,
-          'border-width': 1,
-          'border-color': '#555',
-          'background-color': '#BDBDBD',
-        },
-      },
-      {
-        selector: 'node[type="episode"]',
-        style: { shape: 'ellipse' },
-      },
-      {
-        selector: 'node[type="episode"][kind="facts"]',
-        style: { 'background-color': '#4A90E2' },
-      },
-      {
-        selector: 'node[type="episode"][kind="state"]',
-        style: { 'background-color': '#7ED321' },
-      },
-      {
-        selector: 'node[type="episode"][kind="emo"]',
-        style: { 'background-color': '#D0021B' },
-      },
-      {
-        selector: 'node[type="episode"][kind!="facts"][kind!="state"][kind!="emo"]',
-        style: { 'background-color': '#9B9B9B' },
-      },
-      {
-        selector: 'node[type="entity"]',
-        style: { shape: 'rectangle' },
-      },
-      {
-        selector: 'node[type="entity"][?is_self]',
-        style: {
-          shape: 'pentagon',
-          'background-color': '#F5A623',
-          width: 48,
-          height: 48,
-          'border-width': 2,
-          'border-color': '#B8860B',
-        },
-      },
-      {
-        selector: 'node[type="entity"][entity_type="person"][!is_self]',
-        style: { 'background-color': '#9013FE' },
-      },
-      {
-        selector: 'node[type="entity"][entity_type="place"][!is_self]',
-        style: { 'background-color': '#8B572A' },
-      },
-      {
-        selector: 'node[type="entity"][entity_type="concept"][!is_self]',
-        style: { 'background-color': '#50E3C2' },
-      },
-      {
-        selector: 'node[type="entity"][entity_type=""][!is_self]',
-        style: { 'background-color': '#BDBDBD' },
-      },
-      {
-        selector: 'node[!is_active]',
-        style: { opacity: 0.5, 'border-style': 'dashed' },
-      },
-      {
-        selector: 'node[?is_suppressed]',
-        style: { opacity: 0.3, 'border-style': 'dotted' },
-      },
-      {
-        selector: 'edge',
-        style: {
-          'curve-style': 'bezier',
-          'target-arrow-shape': 'triangle',
-          'arrow-scale': 0.8,
-        },
-      },
-      {
-        selector: 'edge[type="mentions"]',
-        style: {
-          'line-color': t.mentions,
-          'target-arrow-color': t.mentions,
-          width: 1,
-        },
-      },
-      {
-        selector: 'edge[type="relation"]',
-        style: {
-          'line-color': t.relation,
-          'target-arrow-color': t.relation,
-          width: 'mapData(strength, 0, 1, 1, 4)',
-        },
-      },
-      {
-        selector: 'edge[!is_active]',
-        style: { 'line-style': 'dashed', opacity: 0.4 },
-      },
-      {
-        selector: 'node:selected',
-        style: { 'border-width': 3, 'border-color': '#FF4081' },
-      },
-      {
-        selector: '.hidden',
-        style: { visibility: 'hidden' },
-      },
-      {
-        selector: '.dimmed',
-        style: { opacity: 0.12 },
-      },
-      {
-        selector: 'node.match',
-        style: {
-          'border-width': 4,
-          'border-color': '#FF4081',
-          'border-opacity': 1,
-        },
-      },
-    ],
-  });
-
-  cy.on('tap', 'node', (evt) => {
-    const node = evt.target;
-    state.focus.nodeId = node.id();
-    applyFocus();
-    showDetail(node.id(), node.data('type'));
-  });
-
-  cy.on('tap', 'edge', (evt) => {
-    const edge = evt.target;
-    showDetail(edge.id(), 'relation');
-  });
-
-  cy.on('tap', (evt) => {
-    if (evt.target === cy) {
-      hidePopover();
-      state.selected = null;
-      state.focus.nodeId = null;
-      cy.$(':selected').unselect();
-      applyFocus();
-    }
-  });
-
-  return cy;
+  graphView = new GraphView(elements, state, showDetail);
+  return graphView.cy;
 }
-
-function runLayout() {
-  if (!state.cy) return;
-  const k = state.spread;
-  state.cy.layout({
-    name: 'fcose',
-    quality: 'default',
-    animate: false,
-    randomize: true,
-    idealEdgeLength: 80 * k,
-    nodeSeparation: 75 * k,
-    nodeRepulsion: 4500 * k,
-    gravity: 0.25 / k,
-  }).run();
-}
-
+function runLayout() { graphView?.runLayout(); }
+function applyFilters() { graphView?.refresh(true); }
+function applyHighlight() { graphView?.refresh(true); }
+function applyFocus() { graphView?.refresh(true); }
 let searchTimer = null;
 function setSearchQuery(q) {
   state.search.query = q;
   state.focus.nodeId = null;
-  const clearBtn = document.getElementById('search-clear');
-  if (clearBtn) clearBtn.hidden = !q;
+  document.getElementById('search-clear').hidden = !q;
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => applyHighlight(), 150);
+  searchTimer = setTimeout(applyHighlight, 150);
 }
-
-function applyHighlight() {
-  if (!state.cy) return;
-  const q = state.search.query.trim().toLowerCase();
-  state.cy.batch(() => {
-    state.cy.elements().removeClass('dimmed match');
-    if (!q) return;
-    const matched = state.cy.nodes().filter((n) => {
-      const label = (n.data('label') || '').toLowerCase();
-      return label.includes(q);
-    });
-    if (matched.length === 0) {
-      state.cy.elements().addClass('dimmed');
-      return;
-    }
-    matched.addClass('match');
-    let neighborhood = matched;
-    for (let i = 0; i < state.search.hops; i++) {
-      neighborhood = neighborhood.union(neighborhood.openNeighborhood());
-    }
-    state.cy.elements().difference(neighborhood).addClass('dimmed');
-  });
-}
-
-// クリックで選択したノードを起点に hops 近傍以外を dim する。
-// focus が解除されたら検索ハイライト（あれば）を復元する。
-function applyFocus() {
-  if (!state.cy) return;
-  const focusId = state.focus.nodeId;
-  if (!focusId) {
-    state.cy.batch(() => {
-      state.cy.elements().removeClass('dimmed match');
-    });
-    applyHighlight();
-    return;
-  }
-  state.cy.batch(() => {
-    state.cy.elements().removeClass('dimmed match');
-    const target = state.cy.getElementById(focusId);
-    if (target.length === 0) return;
-    let neighborhood = target;
-    for (let i = 0; i < state.focus.hops; i++) {
-      neighborhood = neighborhood.union(neighborhood.openNeighborhood());
-    }
-    state.cy.elements().difference(neighborhood).addClass('dimmed');
-  });
-}
-
 let spreadTimer = null;
 function setSpread(v) {
   state.spread = v;
   localStorage.setItem('admin_spread', String(v));
-  const valueEl = document.getElementById('spread-value');
-  if (valueEl) valueEl.textContent = v.toFixed(1);
+  document.getElementById('spread-value').textContent = v.toFixed(1);
   clearTimeout(spreadTimer);
-  spreadTimer = setTimeout(() => runLayout(), 300);
+  spreadTimer = setTimeout(runLayout, 300);
 }
-
 function applyGraphTheme() {
   if (!state.cy) return;
-  const t = THEMES[state.theme];
-  state.cy.style()
-    .selector('node')
-      .style('color', t.nodeText)
-    .selector('edge[type="mentions"]')
-      .style('line-color', t.mentions)
-      .style('target-arrow-color', t.mentions)
-    .selector('edge[type="relation"]')
-      .style('line-color', t.relation)
-      .style('target-arrow-color', t.relation)
-    .update();
-}
-
-// ─── Filters ────────────────────────────────────────────────────────────────
-function applyFilters() {
-  if (!state.cy) return;
-  state.cy.batch(() => {
-    state.cy.nodes().forEach((n) => {
-      const t = n.data('type');
-      let visible = true;
-      if (t === 'episode') {
-        const importance = n.data('importance') ?? 1;
-        visible = state.filters.type.episode
-          && !!state.filters.kind[n.data('kind')]
-          && importance >= state.filters.importance;
-      } else if (t === 'entity') {
-        visible = state.filters.type.entity;
-      }
-      // degree threshold: 元グラフの接続数で判定 (hidden 状態は無視)
-      if (visible && state.filters.degree > 0) {
-        if (n.degree(false) < state.filters.degree) visible = false;
-      }
-      n.toggleClass('hidden', !visible);
-    });
-    state.cy.edges().forEach((e) => {
-      const t = e.data('type');
-      let visible = true;
-      if (t === 'mentions') {
-        visible = state.filters.type.mentions;
-      } else if (t === 'relation') {
-        visible = state.filters.type.relation;
-      }
-      if (visible && (e.source().hasClass('hidden') || e.target().hasClass('hidden'))) {
-        visible = false;
-      }
-      e.toggleClass('hidden', !visible);
-    });
-  });
+  const light = state.theme === 'light';
+  state.cy.style().selector('node').style('color', light ? '#1f2328' : '#e6edf3')
+    .style('text-background-color', light ? '#ffffff' : '#161b22')
+    .selector('edge').style('color', light ? '#1f2328' : '#c9d1d9')
+    .style('text-background-color', light ? '#ffffff' : '#161b22').update();
 }
 
 // ─── Stats Bar ──────────────────────────────────────────────────────────────
@@ -503,6 +247,19 @@ function showDetail(cyId, typeHint) {
     path = `/api/episodes/${dbId}`;
   } else if (prefix === 'en') {
     path = `/api/entities/${dbId}`;
+  } else if (prefix === 'th' || prefix === 'po') {
+    const node = state.cy.getElementById(cyId).data();
+    const html = '<h3>' + escapeHtml(node.type) + '</h3><p class="graph-node-content">'
+      + escapeHtml(node.search_text || node.label) + '</p>' + graphView.detailLinks(cyId);
+    document.getElementById('detail-panel').innerHTML = html;
+    if (state.view !== 'panel') {
+      state.view = 'panel';
+      document.body.classList.add('view-panel');
+      document.body.classList.remove('view-popover');
+      document.getElementById('view-toggle').checked = false;
+      hidePopover();
+    }
+    return;
   } else if (prefix === 'men' || prefix === 'rel' || typeHint === 'relation') {
     path = `/api/relations/${dbId}`;
   }
@@ -511,7 +268,8 @@ function showDetail(cyId, typeHint) {
 
   api(path)
     .then((data) => {
-      const html = renderDetail(data);
+      if (state.selected !== cyId || state.surface !== 'graph') return;
+      const html = renderDetail(data) + (graphView?.detailLinks(cyId) || '');
       if (state.view === 'panel') {
         document.getElementById('detail-panel').innerHTML = html;
       } else {
@@ -525,10 +283,10 @@ function showDetail(cyId, typeHint) {
             const pos = ele.isEdge() ? ele.renderedMidpoint() : ele.renderedPosition();
             const container = document.getElementById('cy');
             const rect = container.getBoundingClientRect();
-            let left = pos.x + 12;
-            let top = pos.y + 12;
-            if (left + 320 > rect.width) left = pos.x - 332;
-            if (top + 220 > rect.height) top = pos.y - 232;
+            let left = rect.left + pos.x + 12;
+            let top = rect.top + pos.y + 12;
+            if (left + 320 > window.innerWidth) left -= 344;
+            if (top + 220 > window.innerHeight) top -= 244;
             popover.style.left = Math.max(4, left) + 'px';
             popover.style.top = Math.max(4, top) + 'px';
           }
@@ -536,6 +294,7 @@ function showDetail(cyId, typeHint) {
       }
     })
     .catch((err) => {
+      if (state.selected !== cyId || state.surface !== 'graph') return;
       console.error('detail fetch failed', err);
       const msg = '<div class="empty-state">詳細の取得に失敗しました</div>';
       if (state.view === 'panel') {
@@ -554,15 +313,20 @@ function hidePopover() {
 }
 
 // ─── Modal ──────────────────────────────────────────────────────────────────
+let modalReturnFocus = null;
 function openModal(title, bodyHtml) {
+  modalReturnFocus = document.activeElement;
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = bodyHtml;
   document.getElementById('modal-root').hidden = false;
 }
 
 function closeModal() {
+  if (document.querySelector('#board-editor-form [type="submit"]:disabled')) return;
   document.getElementById('modal-root').hidden = true;
   document.getElementById('modal-body').innerHTML = '';
+  if (modalReturnFocus && modalReturnFocus.isConnected) modalReturnFocus.focus();
+  modalReturnFocus = null;
 }
 
 async function openMergeModal() {
@@ -661,48 +425,263 @@ async function openOrphanModal() {
 }
 
 // ─── Board ──────────────────────────────────────────────────────────────────
+let boardMenuTrigger = null;
+let boardMenuContext = null;
+
+const BOARD_ITEM_MODELS = {
+  space: {
+    actions: ['edit', 'trash'], editLabel: '名前を変更…',
+    editorTitle: '掲示板名を変更', field: 'name', fieldLabel: '名前', maxLength: 128,
+    save: (item, value) => apiJson(`/api/board/spaces/${item.id}`, 'PATCH', {
+      name: value, expected_name: item.name,
+    }),
+  },
+  thread: {
+    actions: ['edit', 'status', 'trash'], editLabel: 'タイトルを変更…',
+    editorTitle: 'スレッドのタイトルを変更', field: 'title', fieldLabel: 'タイトル', maxLength: 300,
+    save: (item, value) => apiJson(`/api/board/threads/${item.id}`, 'PATCH', {
+      title: value, expected_version: item.version,
+    }),
+  },
+  post: {
+    actions: ['edit', 'trash'], editLabel: '本文を編集…',
+    editorTitle: '投稿を編集', field: 'body', fieldLabel: '本文', maxLength: 20000, multiline: true,
+    save: (item, value) => apiJson(`/api/board/posts/${item.id}`, 'PATCH', {
+      body: value, expected_revision: item.revision,
+      editor_kind: 'human', editor_display_name: state.board.author,
+    }),
+  },
+};
+
+const BOARD_ACTIONS = {
+  edit: {
+    label: (kind) => BOARD_ITEM_MODELS[kind].editLabel,
+    run: (kind, item) => openBoardEditor(kind, item),
+  },
+  status: {
+    label: (_, item) => item.status === 'closed' ? '再開する' : 'Close（アーカイブ）',
+    run: (_, item) => changeBoardThreadStatus(item.status === 'closed' ? 'open' : 'closed', item),
+  },
+  trash: {
+    label: () => '削除…', danger: true,
+    run: (kind, item) => trashBoardItem(kind, item.id, item.name || item.title || `投稿 #${item.id}`),
+  },
+};
+
+function getBoardItem(kind, id) {
+  const detail = state.board.thread;
+  const items = {
+    space: state.board.spaces,
+    thread: [...(detail ? [detail.thread] : []), ...state.board.threads],
+    post: detail ? detail.posts : [],
+  };
+  return (items[kind] || []).find((item) => Number(item.id) === Number(id));
+}
+
+function openBoardEditor(kind, item) {
+  const model = BOARD_ITEM_MODELS[kind];
+  const value = escapeHtml(item[model.field]);
+  const attributes = `id="board-editor-value" required maxlength="${model.maxLength}"`;
+  const field = model.multiline
+    ? `<textarea ${attributes} rows="10">${value}</textarea>`
+    : `<input type="text" ${attributes} value="${value}" autocomplete="off">`;
+  openModal(model.editorTitle,
+    '<form id="board-editor-form" class="board-editor-form">' +
+    `<label for="board-editor-value">${model.fieldLabel}</label>${field}` +
+    '<p id="board-editor-error" class="board-editor-error" role="alert" hidden></p>' +
+    '<div class="board-editor-actions"><button type="button" id="board-editor-cancel">キャンセル</button>' +
+    '<button type="submit" class="board-editor-save">保存</button></div></form>');
+  const form = document.getElementById('board-editor-form');
+  const editor = document.getElementById('board-editor-value');
+  const error = document.getElementById('board-editor-error');
+  const save = form.querySelector('[type="submit"]');
+  document.getElementById('board-editor-cancel').addEventListener('click', closeModal);
+  editor.addEventListener('input', () => editor.setCustomValidity(''));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (save.disabled) return;
+    const nextValue = editor.value.trim();
+    if (!nextValue) {
+      editor.setCustomValidity('入力してください。');
+      editor.reportValidity();
+      return;
+    }
+    save.disabled = true;
+    error.hidden = true;
+    try {
+      await model.save(item, nextValue);
+    } catch (err) {
+      error.textContent = `保存できませんでした: ${err.message}`;
+      error.hidden = false;
+      return;
+    } finally {
+      save.disabled = false;
+    }
+    closeModal();
+    if (kind === 'thread') {
+      state.board.selectedThreadId = item.id;
+      state.board.selectedSpaceId = item.space_id;
+      state.board.threadStatus = item.status;
+    }
+    const threadId = state.board.selectedThreadId;
+    try {
+      await reloadBoardSpaces();
+      if (threadId != null) await loadBoardThread(threadId);
+      document.querySelector(`[data-board-menu-kind="${kind}"][data-board-menu-id="${item.id}"]`)?.focus();
+    } catch (err) {
+      window.alert(`変更は保存しましたが、画面を更新できませんでした: ${err.message}`);
+    }
+  });
+  editor.focus();
+  if (!model.multiline) editor.select();
+}
+
+function boardItemMenuButton(kind, id, label) {
+  return `<button type="button" class="board-menu-trigger" data-board-menu-kind="${kind}" ` +
+    `data-board-menu-id="${id}" data-board-menu-label="${escapeHtml(label)}" ` +
+    `aria-label="${escapeHtml(label)}の操作" title="操作" aria-haspopup="menu" ` +
+    'aria-expanded="false" aria-controls="board-action-menu">' +
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<circle cx="3" cy="8" r="1.5" fill="currentColor"/>' +
+    '<circle cx="8" cy="8" r="1.5" fill="currentColor"/>' +
+    '<circle cx="13" cy="8" r="1.5" fill="currentColor"/></svg></button>';
+}
+
+function closeBoardActionMenu(restoreFocus = false) {
+  const menu = document.getElementById('board-action-menu');
+  if (menu) menu.hidden = true;
+  if (boardMenuTrigger) {
+    boardMenuTrigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && boardMenuTrigger.isConnected) boardMenuTrigger.focus();
+  }
+  boardMenuTrigger = null;
+  boardMenuContext = null;
+}
+
+function toggleBoardActionMenu(trigger) {
+  const wasOpen = boardMenuTrigger === trigger;
+  closeBoardActionMenu();
+  if (wasOpen) return;
+  const menu = document.getElementById('board-action-menu');
+  if (!menu) return;
+  const { boardMenuKind: kind, boardMenuId: id } = trigger.dataset;
+  const item = getBoardItem(kind, id);
+  const model = BOARD_ITEM_MODELS[kind];
+  if (!item || !model) return;
+  menu.innerHTML = model.actions.map((actionId) => {
+    const action = BOARD_ACTIONS[actionId];
+    const separator = action.danger ? '<div class="board-menu-separator" role="separator"></div>' : '';
+    return separator + `<button type="button" role="menuitem" ` +
+      `class="${action.danger ? 'board-menu-danger' : ''}" data-board-action="${actionId}">` +
+      `${escapeHtml(action.label(kind, item))}</button>`;
+  }).join('');
+  boardMenuContext = { kind, item };
+  boardMenuTrigger = trigger;
+  trigger.setAttribute('aria-expanded', 'true');
+  menu.hidden = false;
+  const anchor = trigger.getBoundingClientRect();
+  const bounds = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(anchor.right - bounds.width, window.innerWidth - bounds.width - 8))}px`;
+  menu.style.top = `${anchor.bottom + bounds.height + 8 > window.innerHeight
+    ? Math.max(8, anchor.top - bounds.height - 4) : anchor.bottom + 4}px`;
+  menu.querySelector('[role="menuitem"]').focus();
+}
+
+function formatBoardTimestamp(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const formatted = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+  return `${formatted} JST`;
+}
 function renderBoardSpaces() {
+  closeBoardActionMenu();
   const target = document.getElementById('board-spaces');
   if (!target) return;
   if (!state.board.spaces.length) {
-    target.innerHTML = '<div class="empty-state">spaceがありません</div>';
+    target.innerHTML = '<div class="empty-state">掲示板がありません</div>';
     return;
   }
   target.innerHTML = state.board.spaces.map((space) => {
     const selected = Number(space.id) === Number(state.board.selectedSpaceId) ? ' selected' : '';
-    return `<button type="button" class="board-list-item${selected}" data-space-id="${space.id}">` +
+    return '<div class="board-list-row">' +
+      `<button type="button" class="board-list-item board-list-select${selected}" data-space-id="${space.id}">` +
       `<span class="board-list-title">${escapeHtml(space.name)}</span>` +
-      `<span class="board-list-meta">${space.thread_count} threads</span>` +
-      '</button>';
+      `<span class="board-list-meta">${space.thread_count} スレ</span>` +
+      '</button>' +
+      (state.board.trashMode ? '' : boardItemMenuButton('space', space.id, space.name)) +
+      '</div>';
   }).join('');
 }
 
 function renderBoardThreads() {
+  closeBoardActionMenu();
   const target = document.getElementById('board-threads');
   if (!target) return;
+  if (state.board.trashMode) {
+    if (!state.board.trashItems.length) {
+      target.innerHTML = '<div class="empty-state">ゴミ箱は空です</div>';
+      return;
+    }
+    const kindLabels = { space: '掲示板', thread: 'スレッド', post: '投稿' };
+    target.innerHTML = state.board.trashItems.map((item) => {
+      const kindLabel = kindLabels[item.kind] || item.kind;
+      const parent = item.kind === 'space'
+        ? (item.detail || `#${item.item_id}`)
+        : `掲示板: ${item.space_name || '不明'}`;
+      const detail = item.kind === 'post' ? ` · #${item.thread_id}` : '';
+      return '<div class="board-list-row board-trash-row">' +
+        '<div class="board-trash-label">' +
+        `<strong>${escapeHtml(item.title)}</strong>` +
+        `<span class="board-list-meta">${escapeHtml(kindLabel)} · ${escapeHtml(parent)}${detail} · ${escapeHtml(formatBoardTimestamp(item.deleted_at))}</span>` +
+        '</div>' +
+        `<button type="button" class="board-item-action board-restore-action" data-restore-kind="${item.kind}" data-restore-id="${item.item_id}">元に戻す</button>` +
+        '</div>';
+    }).join('');
+    return;
+  }
   if (!state.board.threads.length) {
-    target.innerHTML = '<div class="empty-state">threadがありません</div>';
+    target.innerHTML = '<div class="empty-state">スレッドがありません</div>';
     return;
   }
   target.innerHTML = state.board.threads.map((thread) => {
     const selected = Number(thread.id) === Number(state.board.selectedThreadId) ? ' selected' : '';
-    return `<button type="button" class="board-list-item${selected}" data-thread-id="${thread.id}">` +
+    const statusLabel = thread.status === 'closed' ? ' · アーカイブ' : '';
+    return '<div class="board-list-row">' +
+      `<button type="button" class="board-list-item board-list-select${selected}" data-thread-id="${thread.id}">` +
       `<span class="board-list-title">${escapeHtml(thread.title)}</span>` +
-      `<span class="board-list-meta">v${thread.version} · ${thread.post_count} posts</span>` +
-      '</button>';
+      `<span class="board-list-meta">v${thread.version} · ${thread.post_count} 投稿${statusLabel}</span>` +
+      '</button>' +
+      boardItemMenuButton('thread', thread.id, thread.title) +
+      '</div>';
   }).join('');
 }
 
 function renderBoardThread() {
+  closeBoardActionMenu();
   const target = document.getElementById('board-thread');
   if (!target) return;
+  if (state.board.trashMode) {
+    target.innerHTML = '<div class="empty-state">ゴミ箱の項目は、一覧から元に戻せます。</div>';
+    return;
+  }
   const data = state.board.thread;
   if (!data) {
-    target.innerHTML = '<div class="empty-state">threadを選択してください</div>';
+    target.innerHTML = '<div class="empty-state">スレッドを選択してください</div>';
     return;
   }
 
   const thread = data.thread;
+  const closed = thread.status === 'closed';
   const posts = data.posts || [];
   const postHtml = posts.map((post) => {
     const allowedKind = ['summary', 'decision', 'note'].includes(post.kind) ? post.kind : 'message';
@@ -710,28 +689,34 @@ function renderBoardThread() {
       ? 'board-post'
       : `board-post board-post-${allowedKind}`;
     const author = post.author_name || post.author_kind || 'unknown';
-    return `<article class="${className}">` +
+    const postedAt = post.created_at || '';
+    return `<article class="${className}" id="board-post-${post.id}">` +
       '<div class="board-post-head">' +
       `<strong>${escapeHtml(author)}</strong>` +
       `<span class="board-post-kind">${escapeHtml(post.kind)}</span>` +
       `<span>r${post.revision}</span>` +
-      `<span>${escapeHtml(post.created_at)}</span>` +
+      `<time datetime="${escapeHtml(postedAt)}">${escapeHtml(formatBoardTimestamp(postedAt))}</time>` +
+      boardItemMenuButton('post', post.id, `投稿 #${post.id}`) +
       '</div>' +
       `<div class="board-post-body">${escapeHtml(post.body)}</div>` +
       '</article>';
   }).join('');
+  const composer = closed
+    ? '<div class="board-closed-note">このスレッドはアーカイブされています。再開すると投稿できます。</div>'
+    : '<div class="board-composer">' +
+      '<textarea id="board-post-body" maxlength="20000" placeholder="このスレッドへ投稿..."></textarea>' +
+      '<div class="board-composer-actions"><button type="button" id="board-post-submit">投稿</button></div></div>';
 
   target.innerHTML =
     '<div class="board-thread-header">' +
-    `<h2>${escapeHtml(thread.title)}</h2>` +
-    `<span class="board-list-meta">thread #${thread.id} · v${thread.version} · ${escapeHtml(thread.status)}</span>` +
+    '<div>' + `<h2>${escapeHtml(thread.title)}</h2>` +
+    `<span class="board-list-meta">thread #${thread.id} · v${thread.version} · ${closed ? 'アーカイブ済み' : 'Open'}</span>` +
     '</div>' +
-    (postHtml || '<div class="empty-state">postがありません</div>') +
-    '<div class="board-composer">' +
-    '<textarea id="board-post-body" maxlength="20000" placeholder="このthreadへ投稿..."></textarea>' +
-    '<div class="board-composer-actions">' +
-    '<button type="button" id="board-post-submit">Post</button>' +
-    '</div></div>';
+    '<div class="board-thread-actions">' +
+    boardItemMenuButton('thread', thread.id, thread.title) +
+    '</div></div>' +
+    (postHtml || '<div class="empty-state">投稿がありません</div>') +
+    composer;
 }
 
 async function reloadBoardSpaces() {
@@ -747,7 +732,36 @@ async function reloadBoardSpaces() {
   await reloadBoardThreads();
 }
 
+function renderBoardModeControls() {
+  const archive = document.getElementById('board-archive-toggle');
+  if (archive) {
+    archive.hidden = state.board.trashMode;
+    archive.textContent = state.board.threadStatus === 'open' ? 'アーカイブを見る' : 'Openスレを見る';
+    archive.setAttribute('aria-pressed', state.board.threadStatus === 'closed' ? 'true' : 'false');
+  }
+  const trash = document.getElementById('board-trash-toggle');
+  if (trash) {
+    trash.textContent = state.board.trashMode ? '掲示板へ戻る' : 'ゴミ箱';
+    trash.setAttribute('aria-pressed', state.board.trashMode ? 'true' : 'false');
+  }
+  const createSpace = document.getElementById('board-create-space');
+  const createThread = document.getElementById('board-create-thread');
+  if (createSpace) createSpace.hidden = state.board.trashMode;
+  if (createThread) createThread.hidden = state.board.trashMode;
+}
+
 async function reloadBoardThreads() {
+  renderBoardModeControls();
+  if (state.board.trashMode) {
+    const data = await api('/api/board/trash');
+    state.board.trashItems = data.items || [];
+    state.board.threads = [];
+    state.board.thread = null;
+    state.board.selectedThreadId = null;
+    renderBoardThreads();
+    renderBoardThread();
+    return;
+  }
   if (state.board.selectedSpaceId == null) {
     state.board.threads = [];
     state.board.thread = null;
@@ -757,7 +771,7 @@ async function reloadBoardThreads() {
     return;
   }
   const data = await api(
-    `/api/board/threads?space_id=${encodeURIComponent(state.board.selectedSpaceId)}`
+    `/api/board/threads?space_id=${encodeURIComponent(state.board.selectedSpaceId)}&status=${encodeURIComponent(state.board.threadStatus)}`
   );
   state.board.threads = data.threads || [];
   if (
@@ -773,15 +787,20 @@ async function reloadBoardThreads() {
 
 async function loadBoardThread(threadId) {
   const data = await api(`/api/board/threads/${threadId}`);
+  state.board.trashMode = false;
   state.board.selectedThreadId = Number(threadId);
   state.board.thread = data;
   state.board.selectedSpaceId = data.thread.space_id;
+  state.board.threadStatus = data.thread.status === 'closed' ? 'closed' : 'open';
+  renderBoardModeControls();
   renderBoardSpaces();
   renderBoardThreads();
   renderBoardThread();
 }
 
 async function searchBoard() {
+  state.board.trashMode = false;
+  renderBoardModeControls();
   const input = document.getElementById('board-search-input');
   const q = input ? input.value.trim() : '';
   if (!q) {
@@ -802,6 +821,51 @@ async function searchBoard() {
     `<span class="board-list-meta">${escapeHtml(item.result_type)} · ${escapeHtml(item.body || '')}</span>` +
     '</button>'
   ).join('');
+}
+
+async function changeBoardThreadStatus(status, thread) {
+  if (!thread) return;
+  const result = await apiJson(`/api/board/threads/${thread.id}/status`, 'PATCH', {
+    status,
+    expected_version: thread.version,
+  });
+  state.board.threadStatus = result.status;
+  state.board.selectedSpaceId = thread.space_id;
+  state.board.selectedThreadId = thread.id;
+  await reloadBoardThreads();
+  await loadBoardThread(thread.id);
+  document.querySelector(`[data-board-menu-kind="thread"][data-board-menu-id="${thread.id}"]`)?.focus();
+}
+
+async function trashBoardItem(kind, itemId, label) {
+  const names = { space: '掲示板', thread: 'スレッド', post: '投稿' };
+  if (!window.confirm(`${names[kind] || kind}「${label || `#${itemId}`}」をゴミ箱に移します。あとで復元できます。`)) return;
+  await apiJson(`/api/board/items/${encodeURIComponent(kind)}/${itemId}/trash`, 'POST', {});
+  await reloadBoardSpaces();
+  if (kind === 'post' && state.board.selectedThreadId != null && !state.board.trashMode) {
+    await loadBoardThread(state.board.selectedThreadId);
+  }
+}
+
+async function restoreBoardItem(kind, itemId) {
+  await apiJson(`/api/board/items/${encodeURIComponent(kind)}/${itemId}/restore`, 'POST', {});
+  await reloadBoardSpaces();
+}
+
+async function toggleBoardArchive() {
+  state.board.threadStatus = state.board.threadStatus === 'open' ? 'closed' : 'open';
+  state.board.selectedThreadId = null;
+  state.board.thread = null;
+  renderBoardModeControls();
+  await reloadBoardThreads();
+}
+
+async function toggleBoardTrash() {
+  state.board.trashMode = !state.board.trashMode;
+  state.board.selectedThreadId = null;
+  state.board.thread = null;
+  renderBoardModeControls();
+  await reloadBoardThreads();
 }
 
 async function createBoardSpace() {
@@ -831,6 +895,7 @@ async function createBoardThread() {
     author_kind: 'human',
     initial_post: initialPost,
   });
+  state.board.threadStatus = 'open';
   await reloadBoardThreads();
   await loadBoardThread(created.thread_id);
 }
@@ -857,13 +922,16 @@ async function submitBoardPost() {
 }
 
 async function setSurface(surface) {
-  state.surface = surface === 'board' ? 'board' : 'graph';
+  state.surface = ['graph', 'board', 'activity'].includes(surface) ? surface : 'graph';
   localStorage.setItem('admin_surface', state.surface);
   document.body.classList.toggle('surface-board', state.surface === 'board');
+  document.body.classList.toggle('surface-activity', state.surface === 'activity');
+  document.getElementById('activity-view').hidden = state.surface !== 'activity';
+  if (state.surface !== 'graph') hidePopover();
 
   const cyEl = document.getElementById('cy');
   const boardEl = document.getElementById('board-view');
-  if (cyEl) cyEl.hidden = state.surface === 'board';
+  if (cyEl) cyEl.hidden = state.surface !== 'graph';
   if (boardEl) boardEl.hidden = state.surface !== 'board';
 
   document.querySelectorAll('[data-surface]').forEach((btn) => {
@@ -880,6 +948,8 @@ async function setSurface(surface) {
       const target = document.getElementById('board-thread');
       if (target) target.innerHTML = '<div class="empty-state">Boardの読み込みに失敗しました</div>';
     }
+  } else if (state.surface === 'activity') {
+    await activityView.show();
   } else if (state.cy) {
     state.cy.resize();
   }
@@ -936,10 +1006,7 @@ async function reloadGraph() {
   try {
     state.graphData = await api(`/api/graph?scope=${state.scope}`);
     if (state.cy) {
-      state.cy.elements().remove();
-      state.cy.add(state.graphData.elements);
-      applyFilters();
-      runLayout();
+      graphView.replace(state.graphData.elements);
     }
   } catch (err) {
     console.error('reloadGraph failed', err);
@@ -981,6 +1048,30 @@ function setupEventListeners() {
   const boardView = document.getElementById('board-view');
   if (boardView) {
     boardView.addEventListener('click', (e) => {
+      const menuTrigger = e.target.closest('[data-board-menu-kind]');
+      if (menuTrigger) {
+        e.preventDefault();
+        toggleBoardActionMenu(menuTrigger);
+        return;
+      }
+      const itemAction = e.target.closest('[data-board-action]');
+      if (itemAction && boardMenuContext) {
+        e.preventDefault();
+        const { kind, item } = boardMenuContext;
+        const action = BOARD_ACTIONS[itemAction.dataset.boardAction];
+        closeBoardActionMenu(true);
+        Promise.resolve().then(() => action.run(kind, item))
+          .catch((err) => window.alert(`操作に失敗しました: ${err.message}`));
+        return;
+      }
+      const restoreAction = e.target.closest('[data-restore-kind][data-restore-id]');
+      if (restoreAction) {
+        e.preventDefault();
+        e.stopPropagation();
+        restoreBoardItem(restoreAction.dataset.restoreKind, Number(restoreAction.dataset.restoreId))
+          .catch((err) => window.alert(`復元に失敗しました: ${err.message}`));
+        return;
+      }
       const space = e.target.closest('[data-space-id]');
       if (space) {
         state.board.selectedSpaceId = Number(space.dataset.spaceId);
@@ -1005,10 +1096,68 @@ function setupEventListeners() {
     });
   }
 
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#board-action-menu, [data-board-menu-kind]')) {
+      closeBoardActionMenu();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    const editorForm = document.getElementById('board-editor-form');
+    if (editorForm) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+      } else if (e.key === 'Tab') {
+        const controls = [...document.querySelectorAll('#modal-root button, #modal-root input, #modal-root textarea')]
+          .filter((control) => !control.disabled);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+      return;
+    }
+    if (!boardMenuTrigger) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeBoardActionMenu(true);
+    } else if (e.key === 'Tab') {
+      closeBoardActionMenu(true);
+    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault();
+      const items = [...document.querySelectorAll('#board-action-menu [role="menuitem"]')];
+      const current = items.indexOf(document.activeElement);
+      const index = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
+        : (current + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[index].focus();
+    }
+  });
+  document.addEventListener('scroll', () => closeBoardActionMenu(), true);
+  window.addEventListener('resize', () => closeBoardActionMenu());
+
   const boardRefresh = document.getElementById('board-refresh');
   if (boardRefresh) {
     boardRefresh.addEventListener('click', () => {
-      reloadBoardSpaces().catch((err) => console.error('board refresh failed', err));
+      reloadBoardSpaces().then(() => {
+        if (state.board.selectedThreadId != null) return loadBoardThread(state.board.selectedThreadId);
+      }).catch((err) => console.error('board refresh failed', err));
+    });
+  }
+  const boardArchiveToggle = document.getElementById('board-archive-toggle');
+  if (boardArchiveToggle) {
+    boardArchiveToggle.addEventListener('click', () => {
+      toggleBoardArchive().catch((err) => window.alert(`スレッド一覧を切り替えられません: ${err.message}`));
+    });
+  }
+  const boardTrashToggle = document.getElementById('board-trash-toggle');
+  if (boardTrashToggle) {
+    boardTrashToggle.addEventListener('click', () => {
+      toggleBoardTrash().catch((err) => window.alert(`ゴミ箱を開けません: ${err.message}`));
     });
   }
   const boardCreateSpace = document.getElementById('board-create-space');
@@ -1263,7 +1412,45 @@ async function submitEntityEdit(btn) {
 }
 
 // ─── Boot ───────────────────────────────────────────────────────────────────
+let activityView;
+async function openActivityTarget(event) {
+  if (event.category === 'board') {
+    await setSurface('board');
+    if (event.thread_id) {
+      await loadBoardThread(event.thread_id);
+      await reloadBoardThreads();
+      if (event.target_type === 'post') {
+        document.querySelectorAll('.activity-target').forEach(el => el.classList.remove('activity-target'));
+        const post = document.getElementById(`board-post-${event.target_id}`);
+        post?.classList.add('activity-target');
+        post?.scrollIntoView({block: 'center'});
+      }
+    } else {
+      state.board.selectedSpaceId = event.space_id;
+      state.board.selectedThreadId = null;
+      state.board.thread = null;
+      state.board.trashMode = false;
+      renderBoardSpaces();
+      renderBoardThread();
+      await reloadBoardThreads();
+    }
+    return;
+  }
+  await setSurface('graph');
+  const prefixes = {episode: 'ep', entity: 'en', relation: 'rel'};
+  const id = `${prefixes[event.target_type]}_${event.target_id}`;
+  const node = state.cy?.getElementById(id);
+  if (node?.length && event.target_type !== 'relation') graphView.select(id);
+  else {
+    const paths = {episode: 'episodes', entity: 'entities', relation: 'relations'};
+    const data = await api(`/api/${paths[event.target_type]}/${event.target_id}`);
+    openModal('Activity · 現在の詳細', renderDetail(data));
+  }
+}
+
 async function main() {
+  activityView = new ActivityView(api, openActivityTarget);
+  setupEventListeners();
   try {
     state.stats = await api('/api/stats');
     renderStatsBar();
@@ -1273,15 +1460,14 @@ async function main() {
 
   try {
     state.graphData = await api(`/api/graph?scope=${state.scope}`);
+    await import('/static/cytoscape-bootstrap.js');
     state.cy = initCytoscape(state.graphData.elements);
-    runLayout();
     applyFilters();
   } catch (err) {
     console.error('initial graph fetch failed', err);
     document.getElementById('cy').innerHTML = '<div class="empty-state">グラフの読み込みに失敗しました</div>';
   }
 
-  setupEventListeners();
   setView(state.view);
   setTheme(state.theme);
   await setSurface(state.surface);

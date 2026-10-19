@@ -100,107 +100,9 @@ def _entity_scope_clause(scope: Literal["active", "archived", "all"]) -> str:
 def get_graph(
     kv_path: Path, scope: Literal["active", "archived", "all"]
 ) -> dict[str, Any]:
-    conn = sqlite3.connect(kv_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        ep_where = _episode_scope_clause(scope)
-        ep_rows = conn.execute(
-            f"""
-            SELECT id, content, kind, importance, valid_to, is_suppressed, supersedes
-            FROM episodes
-            WHERE {ep_where}
-            """
-        ).fetchall()
+    from fravenir.admin.graph_view import get_graph as project_graph
 
-        en_where = _entity_scope_clause(scope)
-        en_rows = conn.execute(
-            f"""
-            SELECT id, canonical_name, entity_type, is_self, valid_to, supersedes
-            FROM entities
-            WHERE {en_where}
-            """
-        ).fetchall()
-
-        ep_ids = {r["id"] for r in ep_rows}
-        en_ids = {r["id"] for r in en_rows}
-
-        rel_rows = conn.execute(
-            """
-            SELECT id, src_type, src_id, dst_type, dst_id, predicate, strength, valid_to
-            FROM relations
-            """
-        ).fetchall()
-    finally:
-        conn.close()
-
-    nodes: list[dict[str, Any]] = []
-    for r in ep_rows:
-        label = r["content"][:30] + ("…" if len(r["content"]) > 30 else "")
-        nodes.append({
-            "data": {
-                "id": f"ep_{r['id']}",
-                "label": label,
-                "type": "episode",
-                "kind": r["kind"],
-                "importance": r["importance"],
-                "is_active": r["valid_to"] is None,
-                "is_suppressed": bool(r["is_suppressed"]),
-                "supersedes": r["supersedes"],
-            }
-        })
-
-    for r in en_rows:
-        nodes.append({
-            "data": {
-                "id": f"en_{r['id']}",
-                "label": r["canonical_name"],
-                "type": "entity",
-                "entity_type": r["entity_type"],
-                "is_self": bool(r["is_self"]),
-                "is_active": r["valid_to"] is None,
-                "supersedes": r["supersedes"],
-            }
-        })
-
-    edges: list[dict[str, Any]] = []
-    for r in rel_rows:
-        src_type: str = r["src_type"]
-        dst_type: str = r["dst_type"]
-        src_id: int = r["src_id"]
-        dst_id: int = r["dst_id"]
-
-        if src_type == "episode" and dst_type == "entity":
-            if src_id not in ep_ids or dst_id not in en_ids:
-                continue
-            edges.append({
-                "data": {
-                    "id": f"men_{r['id']}",
-                    "source": f"ep_{src_id}",
-                    "target": f"en_{dst_id}",
-                    "type": "mentions",
-                    "is_active": r["valid_to"] is None,
-                }
-            })
-        elif src_type == "entity" and dst_type == "entity":
-            if src_id not in en_ids or dst_id not in en_ids:
-                continue
-            edges.append({
-                "data": {
-                    "id": f"rel_{r['id']}",
-                    "source": f"en_{src_id}",
-                    "target": f"en_{dst_id}",
-                    "type": "relation",
-                    "predicate": r["predicate"],
-                    "strength": r["strength"],
-                    "is_active": r["valid_to"] is None,
-                }
-            })
-
-    return {
-        "scope": scope,
-        "stats": {"nodes": len(nodes), "edges": len(edges)},
-        "elements": {"nodes": nodes, "edges": edges},
-    }
+    return project_graph(kv_path, scope)
 
 
 def get_episode_detail(kv_path: Path, episode_id: int) -> dict[str, Any] | None:
@@ -356,10 +258,18 @@ def _label_for(conn: sqlite3.Connection, node_type: str, node_id: int) -> str:
             return f"ep_{node_id}"
         content: str = row[0]
         return content[:30] + ("…" if len(content) > 30 else "")
-    row = conn.execute("SELECT canonical_name FROM entities WHERE id = ?", (node_id,)).fetchone()
+    table, field = {
+        "entity": ("entities", "canonical_name"),
+        "thread": ("threads", "title"),
+        "post": ("posts", "body"),
+    }.get(node_type, ("entities", "canonical_name"))
+    row = conn.execute(f"SELECT {field} FROM {table} WHERE id = ?", (node_id,)).fetchone()
     if row is None:
         return f"en_{node_id}"
-    return str(row[0])
+    text = str(row[0])
+    if node_type in ("thread", "post"):
+        return text[:30] + ("…" if len(text) > 30 else "")
+    return text
 
 
 def get_relation_detail(kv_path: Path, relation_id: int) -> dict[str, Any] | None:
